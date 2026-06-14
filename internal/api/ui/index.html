@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slow SQL Analyzer · PostgreSQL 计划分析</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2330;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --accent: #2f81f7;
+    --accent-hover: #4493f8;
+    --critical: #f85149;
+    --warning: #d29922;
+    --info: #58a6ff;
+    --ok: #3fb950;
+    --code-bg: #010409;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header h1 .pg { color: var(--accent); }
+  header .sub { color: var(--text-dim); font-size: 13px; }
+  main {
+    display: grid; grid-template-columns: 440px 1fr; gap: 0;
+    min-height: calc(100vh - 57px);
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { padding: 20px 24px; }
+  .left { border-right: 1px solid var(--border); background: var(--panel); }
+  .right { background: var(--bg); overflow-x: auto; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab {
+    flex: 1; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-dim); cursor: pointer; text-align: center; font-size: 13px;
+    transition: all .12s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  label { display: block; color: var(--text-dim); font-size: 12px; margin: 14px 0 6px; }
+  textarea, input[type=text], input[type=number] {
+    width: 100%; background: var(--code-bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px; font: 13px/1.5 var(--mono); resize: vertical;
+  }
+  textarea { min-height: 150px; }
+  textarea.sql { min-height: 120px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .checks { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; font-size: 13px; }
+  .check input { width: auto; }
+
+  button.primary {
+    width: 100%; margin-top: 18px; padding: 11px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button.primary:hover { background: var(--accent-hover); }
+  button.primary:disabled { opacity: .55; cursor: default; }
+  .linkbtn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; margin-top: 8px; }
+  .linkbtn:hover { text-decoration: underline; }
+
+  .err { margin-top: 14px; padding: 10px 12px; background: rgba(248,81,73,.12); border: 1px solid var(--critical);
+    border-radius: 6px; color: var(--critical); font-size: 13px; }
+
+  .empty { color: var(--text-dim); padding: 60px 20px; text-align: center; }
+
+  /* summary chips */
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .chip { padding: 6px 12px; border-radius: 999px; font-size: 13px; border: 1px solid var(--border); background: var(--panel); }
+  .chip b { font-weight: 700; }
+  .chip.crit { color: var(--critical); border-color: rgba(248,81,73,.4); }
+  .chip.warn { color: var(--warning); border-color: rgba(210,153,34,.4); }
+  .chip.info { color: var(--info); border-color: rgba(88,166,255,.4); }
+  .chip.ok { color: var(--ok); border-color: rgba(63,185,80,.4); }
+  .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; background: var(--panel-2); color: var(--text-dim); }
+  .badge.est { color: var(--warning); }
+
+  section { margin-bottom: 26px; }
+  h2 { font-size: 14px; color: var(--text-dim); font-weight: 600; margin: 0 0 12px;
+       text-transform: uppercase; letter-spacing: .06em; }
+
+  /* plan tree */
+  .tree { font: 13px/1.7 var(--mono); }
+  .node { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; border-radius: 4px; }
+  .node.flagged { padding-left: 6px; }
+  .node .glyph { width: 16px; display: inline-block; text-align: center; }
+  .node .lbl { color: var(--text); }
+  .node.flagged.crit .lbl { color: var(--critical); }
+  .node.flagged.warn .lbl { color: var(--warning); }
+  .node.flagged.info .lbl { color: var(--info); }
+  .node .stats { color: var(--text-dim); font-size: 11.5px; }
+
+  /* findings */
+  .finding { background: var(--panel); border: 1px solid var(--border); border-left-width: 3px;
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }
+  .finding.crit { border-left-color: var(--critical); }
+  .finding.warn { border-left-color: var(--warning); }
+  .finding.info { border-left-color: var(--info); }
+  .finding .ftop { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+  .finding .sev { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .finding.crit .sev { color: var(--critical); background: rgba(248,81,73,.14); }
+  .finding.warn .sev { color: var(--warning); background: rgba(210,153,34,.14); }
+  .finding.info .sev { color: var(--info); background: rgba(88,166,255,.14); }
+  .finding .rule { font: 12px var(--mono); color: var(--text-dim); }
+  .finding .nlbl { font-weight: 600; }
+  .finding .row-line { font-size: 13px; margin: 4px 0; }
+  .finding .row-line .k { color: var(--text-dim); display: inline-block; width: 92px; }
+  .finding .path { font: 11.5px var(--mono); color: var(--text-dim); word-break: break-all; }
+
+  /* actions */
+  .action { margin-bottom: 12px; }
+  .action .akind { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .codebox { display: flex; align-items: stretch; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .codebox pre { margin: 0; padding: 10px 12px; flex: 1; overflow-x: auto; font: 13px/1.5 var(--mono); color: var(--ok); }
+  .codebox button { background: var(--panel-2); border: none; border-left: 1px solid var(--border); color: var(--text-dim);
+    padding: 0 14px; cursor: pointer; font-size: 12px; }
+  .codebox button:hover { color: var(--text); background: var(--panel); }
+  .note { color: var(--text-dim); font-size: 12px; margin-top: 10px; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="pg">PostgreSQL</span> 计划分析器</h1>
+  <span class="sub">输入 SQL 或执行计划，诊断是否最优并给出可执行建议</span>
+</header>
+
+<main>
+  <!-- LEFT: input -->
+  <div class="panel left">
+    <div class="tabs">
+      <div class="tab active" data-mode="live" onclick="setMode('live')">实时（连库 EXPLAIN）</div>
+      <div class="tab" data-mode="offline" onclick="setMode('offline')">离线（粘贴 EXPLAIN JSON）</div>
+    </div>
+
+    <!-- live form -->
+    <div id="form-live">
+      <label>SQL 查询</label>
+      <textarea id="sql" class="sql" placeholder="SELECT * FROM orders WHERE status = 'pending';"></textarea>
+
+      <div class="row">
+        <div>
+          <label>DSN（可选，留空用服务端默认）</label>
+          <input type="text" id="dsn" placeholder="postgres://user@host/db">
+        </div>
+        <div>
+          <label>超时</label>
+          <input type="text" id="timeout" placeholder="30s">
+        </div>
+      </div>
+
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="analyze" checked> 实际执行（ANALYZE，拿到真实统计）</label>
+        <label class="check"><input type="checkbox" id="allowWrites"> 允许写语句（在回滚事务内执行）</label>
+      </div>
+    </div>
+
+    <!-- offline form -->
+    <div id="form-offline" class="hidden">
+      <label>EXPLAIN (FORMAT JSON) 输出（顶层数组）</label>
+      <textarea id="plan" placeholder='[{"Plan":{...},"Execution Time":12.3}]' style="min-height:200px"></textarea>
+      <button class="linkbtn" onclick="loadSample()">载入示例计划</button>
+
+      <label>原始 SQL（可选，仅展示）</label>
+      <input type="text" id="oquery" placeholder="SELECT ...">
+    </div>
+
+    <button class="primary" id="runBtn" onclick="analyze()">分析</button>
+    <div id="err" class="err hidden"></div>
+
+    <p class="note">实时模式在只读事务内执行并设置 statement_timeout；写语句需勾选「允许写语句」。</p>
+  </div>
+
+  <!-- RIGHT: results -->
+  <div class="panel right">
+    <div id="results">
+      <div class="empty">在左侧输入查询或粘贴计划，点击「分析」查看结果。</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SEV = { critical: {cls:'crit', glyph:'🔴'}, warning: {cls:'warn', glyph:'⚠'}, info: {cls:'info', glyph:'ℹ'} };
+
+function setMode(mode) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  document.getElementById('form-live').classList.toggle('hidden', mode !== 'live');
+  document.getElementById('form-offline').classList.toggle('hidden', mode !== 'offline');
+}
+
+function showErr(msg) {
+  const e = document.getElementById('err');
+  e.textContent = msg;
+  e.classList.toggle('hidden', !msg);
+}
+
+async function analyze() {
+  showErr('');
+  const btn = document.getElementById('runBtn');
+  const mode = document.querySelector('.tab.active').dataset.mode;
+  btn.disabled = true; btn.textContent = '分析中…';
+  try {
+    let r;
+    if (mode === 'live') {
+      const body = { query: document.getElementById('sql').value.trim() };
+      const dsn = document.getElementById('dsn').value.trim();
+      if (dsn) body.dsn = dsn;
+      if (!document.getElementById('analyze').checked) body.analyze = false;
+      if (document.getElementById('allowWrites').checked) body.allow_writes = true;
+      const to = document.getElementById('timeout').value.trim();
+      if (to) body.timeout = to;
+      if (!body.query) throw new Error('请输入 SQL 查询');
+      r = await postJSON('/v1/analyze', body);
+    } else {
+      const raw = document.getElementById('plan').value.trim();
+      if (!raw) throw new Error('请粘贴 EXPLAIN JSON');
+      let plan; try { plan = JSON.parse(raw); } catch (e) { throw new Error('EXPLAIN JSON 解析失败：' + e.message); }
+      const body = { plan };
+      const q = document.getElementById('oquery').value.trim();
+      if (q) body.query = q;
+      r = await postJSON('/v1/plan', body);
+    }
+    render(r);
+  } catch (e) {
+    document.getElementById('results').innerHTML = '';
+    showErr(e.message || String(e));
+  } finally {
+    btn.disabled = false; btn.textContent = '分析';
+  }
+}
+
+async function postJSON(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+
+function fmtRows(n) {
+  if (n == null) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
+  return Math.round(n).toString();
+}
+
+function topSev(findings, idxs) {
+  let top = -1, name = null;
+  for (const i of (idxs||[])) {
+    const f = findings[i]; const rank = f.severity === 'critical' ? 2 : f.severity === 'warning' ? 1 : 0;
+    if (rank > top) { top = rank; name = f.severity; }
+  }
+  return name;
+}
+
+function render(d) {
+  const root = document.getElementById('results');
+  if (d.error) { showErr(d.error); root.innerHTML=''; return; }
+  const s = d.summary || {};
+  const analyzeBadge = d.is_analyze
+    ? '<span class="badge">ANALYZE 真实统计</span>'
+    : '<span class="badge est">仅估算</span>';
+
+  let html = '<div class="chips">';
+  if (d.execution_time_ms) html += `<div class="chip">执行 <b>${d.execution_time_ms.toFixed(2)} ms</b></div>`;
+  if (d.planning_time_ms) html += `<div class="chip">规划 <b>${d.planning_time_ms.toFixed(2)} ms</b></div>`;
+  html += analyzeBadge;
+  html += `<div class="chip crit">🔴 <b>${s.critical||0}</b> critical</div>`;
+  html += `<div class="chip warn">⚠ <b>${s.warning||0}</b> warning</div>`;
+  html += `<div class="chip info">ℹ <b>${s.info||0}</b> info</div>`;
+  html += '</div>';
+
+  // plan tree
+  if (d.plan_tree) {
+    html += '<section><h2>计划树</h2><div class="tree" id="tree"></div></section>';
+  }
+
+  // findings
+  const findings = d.findings || [];
+  html += `<section><h2>诊断 (${findings.length})</h2><div id="findings">`;
+  if (!findings.length) html += '<div class="empty" style="padding:24px">未检测到反模式。</div>';
+  findings.forEach((f, i) => {
+    const sv = SEV[f.severity] || SEV.info;
+    html += `<div class="finding ${sv.cls}" id="f${i}">`;
+    html += `<div class="ftop"><span class="sev">${sv.glyph} ${f.severity.toUpperCase()}</span>` +
+            `<span class="rule">${f.rule}</span><span class="nlbl">${esc(f.node_label)}</span></div>`;
+    html += `<div class="row-line"><span class="k">问题</span>${esc(f.problem)}</div>`;
+    html += `<div class="row-line"><span class="k">建议</span>${esc(f.recommendation)}</div>`;
+    if (f.node_path) html += `<div class="path">${esc(f.node_path)}</div>`;
+    html += '</div>';
+  });
+  html += '</div></section>';
+
+  // actions
+  const a = d.actions || {};
+  const groups = [
+    {k:'indexes', title:'建索引（启发式，需复核）'},
+    {k:'analyze', title:'刷新统计'},
+    {k:'config', title:'调整配置'}
+  ];
+  const hasActions = groups.some(g => (a[g.k]||[]).length);
+  if (hasActions) {
+    html += '<section><h2>建议动作</h2>';
+    for (const g of groups) {
+      for (const sql of (a[g.k]||[])) {
+        html += `<div class="action"><div class="akind">${g.title}</div>` +
+                `<div class="codebox"><pre>${esc(sql)}</pre>` +
+                `<button onclick="copy(this, ${JSON.stringify(sql).replace(/"/g,'&quot;')})">复制</button></div></div>`;
+      }
+    }
+    html += '<p class="note">索引建议通过词法提取列引用生成，请在你的 schema 上复核后执行。</p></section>';
+  }
+
+  root.innerHTML = html;
+  if (d.plan_tree) renderTree(document.getElementById('tree'), d.plan_tree, findings);
+}
+
+function renderTree(host, node, findings) {
+  const top = topSev(findings, node.findings);
+  const div = document.createElement('div');
+  div.className = 'node' + (top ? ' flagged ' + SEV[top].cls : '');
+  div.style.paddingLeft = (node.depth * 18) + 'px';
+  const glyph = top ? SEV[top].glyph : '·';
+  let stats = `est=${fmtRows(node.estimated_rows)}`;
+  if (node.actual_rows != null) stats += ` · act=${fmtRows(node.actual_rows)}`;
+  if (node.loops && node.loops > 1) stats += ` · loops=${fmtRows(node.loops)}`;
+  if (node.time_ms) stats += ` · ${node.time_ms.toFixed(2)}ms`;
+  if (node.cost) stats += ` · cost=${node.cost.toFixed(0)}`;
+  div.innerHTML = `<span class="glyph">${glyph}</span><span class="lbl">${esc(node.label)}</span><span class="stats">${stats}</span>`;
+  if (node.findings && node.findings.length) {
+    div.style.cursor = 'pointer';
+    div.title = '点击定位到诊断';
+    div.onclick = () => document.getElementById('f'+node.findings[0]).scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  host.appendChild(div);
+  for (const c of (node.children||[])) renderTree(host, c, findings);
+}
+
+function copy(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent; btn.textContent = '已复制 ✓';
+    setTimeout(() => btn.textContent = old, 1200);
+  });
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function loadSample() {
+  document.getElementById('plan').value = JSON.stringify(SAMPLE, null, 2);
+}
+
+const SAMPLE = [
+  {"Plan":{"Node Type":"Seq Scan","Relation Name":"orders","Schema":"public","Alias":"orders","Startup Cost":0.0,"Total Cost":154100.0,"Plan Rows":1000000,"Plan Width":24,"Actual Startup Time":0.012,"Actual Total Time":982.341,"Actual Rows":1000000,"Actual Loops":1,"Filter":"((status)::text = 'pending'::text)","Rows Removed by Filter":9900000,"Shared Hit Blocks":4,"Shared Read Blocks":44210},"Planning Time":0.094,"Execution Time":982.386,"Triggers":[]}
+];
+</script>
+</body>
+</html>

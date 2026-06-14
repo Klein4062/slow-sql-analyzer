@@ -4,6 +4,7 @@
 package api
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,9 @@ import (
 	"github.com/Klein4062/slow-sql-analyzer/internal/rules"
 	"github.com/Klein4062/slow-sql-analyzer/internal/source"
 )
+
+//go:embed ui/index.html
+var indexHTML []byte
 
 // Config configures the server.
 type Config struct {
@@ -47,10 +51,19 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Timeout(2 * time.Minute))
 
+	r.Get("/", s.ui)
+	r.Get("/ui", s.ui)
 	r.Get("/healthz", s.health)
 	r.Post("/v1/plan", s.analyzePlan)
 	r.Post("/v1/analyze", s.analyzeQuery)
 	return r
+}
+
+// ui serves the single-page web UI.
+func (s *Server) ui(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(indexHTML)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

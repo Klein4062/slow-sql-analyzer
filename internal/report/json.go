@@ -13,6 +13,7 @@ type jsonReport struct {
 	ExecutionTime float64            `json:"execution_time_ms,omitempty"`
 	PlanningTime  float64            `json:"planning_time_ms,omitempty"`
 	Summary       summary            `json:"summary"`
+	PlanTree      *treeNode          `json:"plan_tree,omitempty"`
 	Findings      []analyzer.Finding `json:"findings"`
 	Actions       actionJSON         `json:"actions"`
 }
@@ -67,6 +68,7 @@ func RenderJSON(m Model) ([]byte, error) {
 		rep.ExecutionTime = m.Result.ExecutionTime
 		rep.PlanningTime = m.Result.PlanningTime
 	}
+	rep.PlanTree = buildPlanTree(m.Result, m.Findings)
 	if rep.Findings == nil {
 		rep.Findings = []analyzer.Finding{}
 	}

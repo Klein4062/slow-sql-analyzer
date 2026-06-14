@@ -85,11 +85,19 @@ slow-sql-analyzer analyze --dsn "..." -f query.sql
 - 需要分析写语句时用 `--allow-writes`（仍在 `ROLLBACK` 的事务内，永不提交）；
 - 生产库可用 `--no-analyze` 只跑估算（不执行查询）。
 
-### HTTP API
+### HTTP API（含可视化网页）
 
 ```bash
 slow-sql-analyzer serve --addr :8080 --dsn "postgres://..."
 ```
+
+启动后浏览器打开 `http://localhost:8080/` 即可使用**可视化网页**：
+
+- **实时**模式：填 SQL（可选 DSN/超时/是否 ANALYZE/允许写）→ 服务端跑 EXPLAIN；
+- **离线**模式：粘贴 `EXPLAIN (FORMAT JSON)` 输出 → 无需数据库。
+- 结果页渲染：带严重度标注的**计划树**（点击节点跳转诊断）、按严重度分色的 findings 卡片、可一键复制的建议动作（CREATE INDEX / ANALYZE / SET work_mem）。
+
+JSON API 端点同时可用：
 
 ```bash
 # 离线：提交一份 EXPLAIN JSON
