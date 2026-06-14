@@ -45,8 +45,10 @@ func (s PostgresSource) Fetch() (*plan.PlanResult, error) {
 	}
 	defer conn.Close(context.Background())
 
-	// Bound runaway queries at the server.
-	if _, err := conn.Exec(ctx, "SET statement_timeout = $1", int64(timeout/time.Millisecond)); err != nil {
+	// Bound runaway queries at the server. SET is a utility command and does
+	// not accept $1 parameter binding, so inline the integer (we compute it).
+	ms := int64(timeout / time.Millisecond)
+	if _, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = %d", ms)); err != nil {
 		return nil, fmt.Errorf("set statement_timeout: %w", err)
 	}
 
