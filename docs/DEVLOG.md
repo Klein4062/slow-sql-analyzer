@@ -58,6 +58,15 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
 7. **HTTP API**：chi 路由 `POST /v1/plan`、`POST /v1/analyze`、`GET /healthz`。
 8. **测试 + 文档**：parser / rules / advise / report / api 单测，三个 testdata 样例，
    README 与本开发日志。
+9. **实时端到端验证（真实 PostgreSQL 17）**：本地建独立测试库（10 万行、`status` 列倾斜、
+   无索引），跑 `analyze` 检出低效过滤 + 全表扫描 + 热点并给出 `idx (status)` 建议；
+   建上索引后重跑，Seq Scan(14.97ms) → Index Scan(1.23ms)，findings 锐减——闭环验证
+   工具建议确实解决问题。同时验证写语句守卫与 `--allow-writes` 回滚安全（数据未变）。
+   **此阶段发现真实 bug**：`SET statement_timeout = $1` 报错（见下）。
+10. **可视化 Web UI**：`GET /` 通过 `go:embed` 提供单页应用（实时/离线双模式），渲染带
+    严重度标注的计划树（点击节点跳转诊断）、按严重度分色的 findings 卡片、可一键复制的
+    建议动作。为此给 JSON 报告新增 `plan_tree` 字段（节点携带所属 finding 索引），CLI
+    `--format json` 同步受益。
 
 ## 踩过的坑（值得记录）
 
@@ -71,6 +80,15 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
 - **Go 模块代理**：默认 `proxy.golang.org` 在国内超时，切换 `GOPROXY=https://goproxy.cn,direct`
   后正常拉取 cobra / pgx / chi / color。
 - **PG Hash 节点字段名**：实际是 `Peak Memory Usage` 而非 `Peak Memory`，json tag 需对齐。
+- **`SET` 不接受参数绑定**：`SET statement_timeout = $1` 报 `syntax error at or near "$1"`——
+  `SET` 是工具命令，不走 prepared statement，不支持 `$N`。改为内联计算好的毫秒整数
+  `fmt.Sprintf("SET statement_timeout = %d", ms)`。**这个 bug 只有连真库才能暴露**，离线
+  测试与编译都发现不了——印证了实时端到端验证的必要性。
+- **`go:embed` 与 `[]byte` 需空白导入**：用 `var indexHTML []byte` + `//go:embed` 时，
+  若不引用 `embed.FS`，普通 `import "embed"` 会报「imported and not used」，须改成
+  空白导入 `_ "embed"`。
+- **zsh 不做 IFS 分词**：批量改模块路径时 `for f in $files`（`$files` 含换行）在 zsh 下被当成
+  单个文件名，sed 对一长串拼接名报 `No such file`。改用 `grep -rl ... | xargs sed`。
 
 ## 验证
 
@@ -78,11 +96,14 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
 - 离线端到端：`seqscan_large.json` → SeqScan + InefficientFilter + CREATE INDEX(status)；
   `cardinality_misestimate.json` → 50000x 基数误估 + NestedLoop 重扫；
   `disk_sort_and_hash.json` → 92.8MB 磁盘排序 + 4 批次 Hash 溢出 + `work_mem=140MB` 建议。
-- HTTP `/v1/plan` 与 `/healthz` 经 `httptest` 覆盖。
+- **实时端到端（PostgreSQL 17）**：无索引倾斜列查询 → 建议 `idx (status)`；建索引后
+  14.97ms → 1.23ms（≈12×），findings 1 critical+2 warning → 0 critical+1 warning。
+  写语句守卫生效；`--allow-writes` 在回滚事务内执行 UPDATE，前后数据未变。
+- HTTP `/v1/plan`、`/v1/analyze`、`/healthz` 与 Web UI `GET /` 经 `httptest` + `curl` 覆盖。
 
 ## 后续可扩展
 
 - MySQL / 其它数据库的 source 适配器与规则。
 - 文本格式 EXPLAIN 的更健壮解析（目前主路径为 JSON）。
 - 更多规则：并行度不足、分区裁剪缺失、JIT 开销、CTE 物化等。
-- 把计划树渲染为 ASCII 或交互式 HTML 报告。
+- Web UI 增强：计划树的折叠/展开、diff（加索引前后对比）、历史记录。

@@ -2,7 +2,7 @@
 
 通过 **SQL 与执行计划**分析 PostgreSQL 查询计划是否最优，并给出**可执行的优化建议**（缺失索引、`work_mem` 调优、`ANALYZE` 统计、查询改写提示）。
 
-提供 **CLI** 与 **HTTP API** 两种使用方式，支持 **离线解析**已有 EXPLAIN 计划与 **实时连库** 执行 EXPLAIN 两种数据来源。
+提供 **CLI**、**HTTP API** 与**可视化网页**三种使用方式，支持 **离线解析**已有 EXPLAIN 计划与 **实时连库** 执行 EXPLAIN 两种数据来源。已用真实 PostgreSQL 17 闭环验证（无索引查询建议建索引后，14.97ms → 1.23ms，≈12×）。
 
 ```
 PostgreSQL Plan Analysis
@@ -21,6 +21,7 @@ Suggested actions
 
 ## 特性
 
+- **三种界面**：CLI、HTTP JSON API（`/v1/plan`、`/v1/analyze`）、浏览器**可视化网页**（`GET /`，带可点击跳转的标注计划树）。
 - **8 条检测规则**，覆盖最常见的计划反模式：
   | 规则 | 触发 | 建议 |
   |---|---|---|
@@ -130,15 +131,16 @@ curl -s localhost:8080/v1/analyze \
 
 ```
 internal/
-├── plan/      # EXPLAIN JSON 解析 + 计划树模型与遍历
-├── source/    # 数据来源：FileSource（离线）/ PostgresSource（实时）
-├── analyzer/  # 规则引擎（Finding / Severity / AnalysisContext / Report）
-├── rules/     # 8 条检测规则
-├── advise/    # CREATE INDEX / work_mem / ANALYZE 动作合成
-├── report/    # text 与 json 渲染
-├── api/       # chi HTTP 路由
-└── cli/       # cobra 命令（plan / analyze / serve / version）
-testdata/      # 真实 EXPLAIN JSON 样例，供单测
+├── plan/       # EXPLAIN JSON 解析 + 计划树模型与遍历
+├── source/     # 数据来源：FileSource（离线）/ PostgresSource（实时）
+├── analyzer/   # 规则引擎（Finding / Severity / AnalysisContext / Report）
+├── rules/      # 8 条检测规则
+├── advise/     # CREATE INDEX / work_mem / ANALYZE 动作合成
+├── report/     # text / json 渲染 + plan_tree 序列化
+├── api/        # chi HTTP 路由 + 可视化网页
+│   └── ui/     #   单页 Web UI（go:embed 提供于 GET /）
+└── cli/        # cobra 命令（plan / analyze / serve / version）
+testdata/       # 真实 EXPLAIN JSON 样例，供单测
 ```
 
 ## 测试
