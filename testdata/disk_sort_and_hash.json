@@ -1,0 +1,112 @@
+[
+  {
+    "Plan": {
+      "Node Type": "GroupAggregate",
+      "Strategy": "Sorted",
+      "Parallel Aware": false,
+      "Startup Cost": 10000000002314.23,
+      "Total Cost": 10000000004314.23,
+      "Plan Rows": 500000,
+      "Plan Width": 64,
+      "Actual Startup Time": 210.521,
+      "Actual Total Time": 455.120,
+      "Actual Rows": 500000,
+      "Actual Loops": 1,
+      "Group Key": ["events.user_id", "events.day"],
+      "Plans": [
+        {
+          "Node Type": "Sort",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Startup Cost": 10000000002314.23,
+          "Total Cost": 10000000002814.23,
+          "Plan Rows": 500000,
+          "Plan Width": 64,
+          "Actual Startup Time": 210.500,
+          "Actual Total Time": 320.100,
+          "Actual Rows": 500000,
+          "Actual Loops": 1,
+          "Sort Key": ["events.user_id", "events.day"],
+          "Sort Method": "external merge",
+          "Sort Space Used": 95000,
+          "Sort Space Type": "Disk",
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Join Type": "Inner",
+              "Startup Cost": 1.15,
+              "Total Cost": 4.10,
+              "Plan Rows": 500000,
+              "Plan Width": 64,
+              "Actual Startup Time": 0.040,
+              "Actual Total Time": 120.000,
+              "Actual Rows": 500000,
+              "Actual Loops": 1,
+              "Inner Unique": true,
+              "Hash Cond": "(events.user_id = users.id)",
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Relation Name": "events",
+                  "Schema": "public",
+                  "Alias": "events",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 1.00,
+                  "Plan Rows": 500000,
+                  "Plan Width": 48,
+                  "Actual Startup Time": 0.010,
+                  "Actual Total Time": 50.000,
+                  "Actual Rows": 500000,
+                  "Actual Loops": 1
+                },
+                {
+                  "Node Type": "Hash",
+                  "Parent Relationship": "Inner",
+                  "Parallel Aware": false,
+                  "Startup Cost": 0.50,
+                  "Total Cost": 0.50,
+                  "Plan Rows": 100000,
+                  "Plan Width": 8,
+                  "Actual Startup Time": 0.020,
+                  "Actual Total Time": 0.020,
+                  "Actual Rows": 100000,
+                  "Actual Loops": 1,
+                  "Hash Buckets": 65536,
+                  "Hash Batches": 4,
+                  "Original Hash Buckets": 65536,
+                  "Original Hash Batches": 1,
+                  "Peak Memory Usage": 4096,
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Relation Name": "users",
+                      "Schema": "public",
+                      "Alias": "users",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 0.50,
+                      "Plan Rows": 100000,
+                      "Plan Width": 8,
+                      "Actual Startup Time": 0.005,
+                      "Actual Total Time": 10.000,
+                      "Actual Rows": 100000,
+                      "Actual Loops": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 0.300,
+    "Execution Time": 455.200,
+    "Triggers": []
+  }
+]
