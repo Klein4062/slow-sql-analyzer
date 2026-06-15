@@ -40,16 +40,24 @@ Suggested actions
 
 ## 安装
 
+**方式一：直接下载预编译二进制（最省事，无需装 Go）**
+
+从 [Releases](https://github.com/Klein4062/slow-sql-analyzer/releases/latest) 下载对应平台的单文件（完全静态、零依赖），例如 x86_64 Linux：
+
 ```bash
-go install github.com/Klein4062/slow-sql-analyzer/cmd/slow-sql-analyzer@latest
+curl -L -o slow-sql-analyzer \
+  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.1.0/slow-sql-analyzer-linux-amd64
+chmod +x slow-sql-analyzer
+./slow-sql-analyzer version   # v0.1.0
 ```
 
-或源码构建：
+**方式二：从源码构建**
 
 ```bash
+go install github.com/Klein4062/slow-sql-analyzer/cmd/slow-sql-analyzer@latest
+# 或
 git clone https://github.com/Klein4062/slow-sql-analyzer.git
-cd slow-sql-analyzer
-go build -o slow-sql-analyzer ./cmd/slow-sql-analyzer
+cd slow-sql-analyzer && make build
 ```
 
 ### 内网部署（零依赖单文件）
@@ -57,9 +65,11 @@ go build -o slow-sql-analyzer ./cmd/slow-sql-analyzer
 编译为**单个完全静态的二进制**，拷到内网目标机直接跑，不需要 Go/Python/`libpq`/`psql`：
 （实时连库用 pgx，已编译进二进制。）
 
+- 没装 Go？直接用上面的「方式一」从 Releases 下载，内网机零安装。
+- 有 Go 的构建机：`make build-all` 一次性交叉编译 Linux/macOS/Windows × amd64/arm64 → `dist/`，再 `scp` 到内网机。
+
 ```bash
-make build-all        # 一次性交叉编译 Linux/macOS/Windows × amd64/arm64 → dist/
-# 把 dist/slow-sql-analyzer-linux-amd64 拷到内网机：
+make build-all
 scp dist/slow-sql-analyzer-linux-amd64 user@host:~/slow-sql-analyzer
 ```
 

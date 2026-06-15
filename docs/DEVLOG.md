@@ -67,6 +67,16 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     严重度标注的计划树（点击节点跳转诊断）、按严重度分色的 findings 卡片、可一键复制的
     建议动作。为此给 JSON 报告新增 `plan_tree` 字段（节点携带所属 finding 索引），CLI
     `--format json` 同步受益。
+11. **内网部署：交叉编译 + 静态二进制 + GitHub Release**。一度考虑改用 Python 重写以适配
+    内网，但澄清后发现 **Go 的依赖只在编译机装一次**——`CGO_ENABLED=0` 编出单个完全静态
+    二进制（`file` 确认 `statically linked`），部署机零依赖，且实时连库的 pgx 已编译进二进制，
+    目标机连 `psql`/`libpq` 都不用装，反而比 Python psql 子进程方案更干净。落地：
+    - `Makefile`：`build` / `build-all`（交叉编译 linux/darwin/windows × amd64/arm64）、
+      `test`/`vet`/`vendor`/`clean`，版本号经 `-ldflags -X` 注入；
+    - `make vendor` + `go build -mod=vendor` 支持完全离线的 air-gapped 构建；
+    - `docs/DEPLOY.md`：单文件部署、systemd 服务、只读账号建议；
+    - 打 `v0.1.0` tag，`gh release create` 上传 6 个平台二进制 + `SHA256SUMS` 校验和。
+    一个二进制对应一个平台（不跨平台跑），但一次为全平台各编一个即可。
 
 ## 踩过的坑（值得记录）
 
@@ -100,6 +110,9 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
   14.97ms → 1.23ms（≈12×），findings 1 critical+2 warning → 0 critical+1 warning。
   写语句守卫生效；`--allow-writes` 在回滚事务内执行 UPDATE，前后数据未变。
 - HTTP `/v1/plan`、`/v1/analyze`、`/healthz` 与 Web UI `GET /` 经 `httptest` + `curl` 覆盖。
+- **打包与发布**：`make build-all` 产出 6 个平台二进制；`file` 确认 linux/amd64 为
+  `statically linked`；版本号注入验证为 `v0.1.0`；`gh release create` 上传二进制 + SHA256SUMS
+  到 [Release v0.1.0](https://github.com/Klein4062/slow-sql-analyzer/releases/tag/v0.1.0)。
 
 ## 后续可扩展
 
