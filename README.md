@@ -1,5 +1,8 @@
 # slow-sql-analyzer
 
+![CI](https://github.com/Klein4062/slow-sql-analyzer/actions/workflows/ci.yml/badge.svg)
+[![Release](https://img.shields.io/github/v/release/Klein4062/slow-sql-analyzer)](https://github.com/Klein4062/slow-sql-analyzer/releases/latest)
+
 通过 **SQL 与执行计划**分析 PostgreSQL 查询计划是否最优，并给出**可执行的优化建议**（缺失索引、`work_mem` 调优、`ANALYZE` 统计、查询改写提示）。
 
 提供 **CLI**、**HTTP API** 与**可视化网页**三种使用方式，支持 **离线解析**已有 EXPLAIN 计划与 **实时连库** 执行 EXPLAIN 两种数据来源。已用真实 PostgreSQL 17 闭环验证（无索引查询建议建索引后，14.97ms → 1.23ms，≈12×）。
