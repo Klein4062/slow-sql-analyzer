@@ -1,0 +1,52 @@
+name: CI
+
+# 每次推送到 main 或提 PR 时自动跑全套测试，作为修改的强制门禁。
+# 任何改动都必须让下列检查保持全绿，不得跳过或删除既有测试。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: gofmt check
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "gofmt 需要格式化的文件:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test（禁缓存，强制全跑）
+        run: go test -count=1 -cover ./...
+
+  cross-compile:
+    name: cross-compile smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: build-all（确认所有目标平台可静态交叉编译）
+        run: make build-all
+      - name: confirm linux/amd64 is static
+        run: file dist/slow-sql-analyzer-linux-amd64 | grep -q "statically linked"

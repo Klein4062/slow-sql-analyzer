@@ -190,8 +190,11 @@ testdata/       # 真实 EXPLAIN JSON 样例，供单测
 ## 测试
 
 ```bash
-go test ./...
+go test ./...      # 跑测试
+make ci            # 与 GitHub Actions 一致的完整门禁：gofmt + vet + build + test
 ```
+
+所有改动必须保持测试全绿（CI 会自动强制）。测试纪律、基线清单、新增规则清单见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 限制与说明
 
