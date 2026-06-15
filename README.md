@@ -50,9 +50,9 @@ Suggested actions
 
 ```bash
 curl -L -o slow-sql-analyzer \
-  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.2.0/slow-sql-analyzer-linux-amd64
+  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.3.0/slow-sql-analyzer-linux-amd64
 chmod +x slow-sql-analyzer
-./slow-sql-analyzer version   # v0.2.0
+./slow-sql-analyzer version   # v0.3.0
 ```
 
 **方式二：从源码构建**
