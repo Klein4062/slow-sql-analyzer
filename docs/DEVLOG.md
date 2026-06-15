@@ -77,6 +77,13 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     - `docs/DEPLOY.md`：单文件部署、systemd 服务、只读账号建议；
     - 打 `v0.1.0` tag，`gh release create` 上传 6 个平台二进制 + `SHA256SUMS` 校验和。
     一个二进制对应一个平台（不跨平台跑），但一次为全平台各编一个即可。
+12. **可插拔连接器（自定义连接串与客户端）**。实时分析原来只走内置 pgx 驱动，对内网受限
+    环境（只允许 psql、需经堡垒机、有自定义包装脚本）不够灵活。新增 `command` 连接器：
+    用户用 `--exec` 提供命令模板（支持 `{dsn}`/`{sql}` 占位符，等价地用 `$SSA_DSN`/
+    `$SSA_SQL`/`$SSA_TIMEOUT` 环境变量避免 shell 引号陷阱），命令负责跑 EXPLAIN 并把
+    `FORMAT JSON` 输出到 stdout，工具只解析其输出。默认仍是 pgx（直连，带只读事务/
+    超时/写拦截安全网）；command 模式下这些安全控制交由用户的命令自行负责（文档已说明）。
+    CLI/API/网页三处都支持切换；`source.PlanSource` 接口让两种连接器对分析层透明。
 
 ## 踩过的坑（值得记录）
 

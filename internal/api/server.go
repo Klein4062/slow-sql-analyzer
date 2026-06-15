@@ -86,6 +86,8 @@ type queryRequest struct {
 	Analyze     *bool          `json:"analyze"`
 	AllowWrites bool           `json:"allow_writes"`
 	Timeout     string         `json:"timeout"`
+	Connector   string         `json:"connector"` // "pgx" (默认) 或 "command"
+	Exec        string         `json:"exec"`      // command 连接器的命令模板
 	Options     requestOptions `json:"options"`
 }
 
@@ -120,14 +122,6 @@ func (s *Server) analyzeQuery(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, "missing 'query' field")
 		return
 	}
-	dsn := req.DSN
-	if dsn == "" {
-		dsn = s.cfg.DefaultDSN
-	}
-	if dsn == "" {
-		httpError(w, http.StatusBadRequest, "no DSN configured (set server --dsn or pass 'dsn' in the request)")
-		return
-	}
 
 	analyze := true
 	if req.Analyze != nil {
@@ -140,13 +134,49 @@ func (s *Server) analyzeQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	src := source.PostgresSource{
-		DSN:         dsn,
-		Query:       req.Query,
-		Analyze:     analyze,
-		AllowWrites: req.AllowWrites,
-		Timeout:     timeout,
+	// --exec 隐式选择 command 连接器。
+	connector := req.Connector
+	if connector == "" {
+		connector = "pgx"
 	}
+	if req.Exec != "" && connector == "pgx" {
+		connector = "command"
+	}
+
+	var src source.PlanSource
+	switch connector {
+	case "pgx":
+		dsn := req.DSN
+		if dsn == "" {
+			dsn = s.cfg.DefaultDSN
+		}
+		if dsn == "" {
+			httpError(w, http.StatusBadRequest, "no DSN configured (set server --dsn or pass 'dsn'/'connector'+'exec' in the request)")
+			return
+		}
+		src = source.PostgresSource{
+			DSN:         dsn,
+			Query:       req.Query,
+			Analyze:     analyze,
+			AllowWrites: req.AllowWrites,
+			Timeout:     timeout,
+		}
+	case "command":
+		if req.Exec == "" {
+			httpError(w, http.StatusBadRequest, "command connector needs 'exec' (a command template using {dsn}/{sql} or $SSA_DSN/$SSA_SQL)")
+			return
+		}
+		src = source.CommandSource{
+			Cmd:     req.Exec,
+			DSN:     req.DSN,
+			Query:   req.Query,
+			Timeout: timeout,
+		}
+	default:
+		httpError(w, http.StatusBadRequest, "unknown connector %q (use pgx or command)", connector)
+		return
+	}
+
 	result, err := src.Fetch()
 	if err != nil {
 		httpError(w, http.StatusBadGateway, "EXPLAIN failed: %v", err)

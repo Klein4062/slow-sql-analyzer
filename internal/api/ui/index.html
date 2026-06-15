@@ -156,8 +156,11 @@
 
       <div class="row">
         <div>
-          <label>DSN（可选，留空用服务端默认）</label>
-          <input type="text" id="dsn" placeholder="postgres://user@host/db">
+          <label>连接器</label>
+          <select id="connector" onchange="onConnectorChange()" style="background:var(--code-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:9px 10px;font:13px var(--mono);width:100%">
+            <option value="pgx">pgx（内置驱动，推荐）</option>
+            <option value="command">command（自定义客户端）</option>
+          </select>
         </div>
         <div>
           <label>超时</label>
@@ -165,7 +168,16 @@
         </div>
       </div>
 
-      <div class="checks">
+      <label>DSN（pgx 必填；command 模式注入为 {dsn}/$SSA_DSN，可留空）</label>
+      <input type="text" id="dsn" placeholder="postgres://user@host/db">
+
+      <div id="execRow" class="hidden">
+        <label>命令模板（command 模式，产出 EXPLAIN JSON 到 stdout）</label>
+        <textarea id="exec" style="min-height:70px" placeholder='psql "{dsn}" -At -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}"'></textarea>
+        <p class="note" style="margin-top:6px">占位符 {dsn}/{sql} 或环境变量 $SSA_DSN/$SSA_SQL/$SSA_TIMEOUT。</p>
+      </div>
+
+      <div id="pgxOnly" class="checks">
         <label class="check"><input type="checkbox" id="analyze" checked> 实际执行（ANALYZE，拿到真实统计）</label>
         <label class="check"><input type="checkbox" id="allowWrites"> 允许写语句（在回滚事务内执行）</label>
       </div>
@@ -204,6 +216,13 @@ function setMode(mode) {
   document.getElementById('form-offline').classList.toggle('hidden', mode !== 'offline');
 }
 
+// 切换连接器：command 模式显示命令模板、隐藏 pgx 专属选项。
+function onConnectorChange() {
+  const cmd = document.getElementById('connector').value === 'command';
+  document.getElementById('execRow').classList.toggle('hidden', !cmd);
+  document.getElementById('pgxOnly').classList.toggle('hidden', cmd);
+}
+
 function showErr(msg) {
   const e = document.getElementById('err');
   e.textContent = msg;
@@ -219,10 +238,20 @@ async function analyze() {
     let r;
     if (mode === 'live') {
       const body = { query: document.getElementById('sql').value.trim() };
-      const dsn = document.getElementById('dsn').value.trim();
-      if (dsn) body.dsn = dsn;
-      if (!document.getElementById('analyze').checked) body.analyze = false;
-      if (document.getElementById('allowWrites').checked) body.allow_writes = true;
+      const connector = document.getElementById('connector').value;
+      body.connector = connector;
+      if (connector === 'command') {
+        const exec = document.getElementById('exec').value.trim();
+        if (!exec) throw new Error('command 模式需要填写命令模板');
+        body.exec = exec;
+        const dsn = document.getElementById('dsn').value.trim();
+        if (dsn) body.dsn = dsn; // 注入为 {dsn}/$SSA_DSN，可留空
+      } else {
+        const dsn = document.getElementById('dsn').value.trim();
+        if (dsn) body.dsn = dsn;
+        if (!document.getElementById('analyze').checked) body.analyze = false;
+        if (document.getElementById('allowWrites').checked) body.allow_writes = true;
+      }
       const to = document.getElementById('timeout').value.trim();
       if (to) body.timeout = to;
       if (!body.query) throw new Error('请输入 SQL 查询');

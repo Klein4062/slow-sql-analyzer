@@ -95,6 +95,8 @@ slow-sql-analyzer plan -f explain.json --format json
 
 ### 实时分析（连库执行 EXPLAIN）
 
+默认用内置 pgx 驱动直连：
+
 ```bash
 slow-sql-analyzer analyze \
     --dsn "postgres://user:pass@host:5432/db?sslmode=disable" \
@@ -103,6 +105,24 @@ slow-sql-analyzer analyze \
 # 从文件读 SQL
 slow-sql-analyzer analyze --dsn "..." -f query.sql
 ```
+
+**自定义客户端**（`--connector command`）：在内网受限环境，可改用自己的客户端（psql、堡垒机/ssh 包装、自定义脚本）来跑 EXPLAIN，工具只解析其 stdout 的 JSON：
+
+```bash
+# 用 psql 作为客户端
+slow-sql-analyzer analyze \
+    --connector command \
+    --dsn "host=10.0.0.5 port=5432 user=app dbname=prod sslmode=disable" \
+    --query "SELECT * FROM orders WHERE status='pending'" \
+    --exec 'psql "{dsn}" -At -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}"'
+
+# 经堡垒机执行（占位符 {dsn}/{sql}，或用 $SSA_DSN/$SSA_SQL/$SSA_TIMEOUT 环境变量）
+slow-sql-analyzer analyze --connector command \
+    --exec 'ssh db-bastion "psql \$SSA_DSN -At -c \"EXPLAIN (ANALYZE, FORMAT JSON) \$SSA_SQL\""' \
+    --query "SELECT ..."
+```
+
+HTTP API 同样支持：`POST /v1/analyze` 传 `{"connector":"command","exec":"...","dsn":"...","query":"..."}`；网页 UI 实时模式的「连接器」下拉可切换。
 
 **安全设计**：默认在 `BEGIN READ ONLY` 事务内执行 EXPLAIN，并设置 `statement_timeout`：
 
@@ -118,7 +138,7 @@ slow-sql-analyzer serve --addr :8080 --dsn "postgres://..."
 
 启动后浏览器打开 `http://localhost:8080/` 即可使用**可视化网页**：
 
-- **实时**模式：填 SQL（可选 DSN/超时/是否 ANALYZE/允许写）→ 服务端跑 EXPLAIN；
+- **实时**模式：填 SQL（可选 DSN/超时/是否 ANALYZE/允许写）→ 服务端跑 EXPLAIN；连接器可在「pgx 内置驱动」与「command 自定义客户端」间切换；
 - **离线**模式：粘贴 `EXPLAIN (FORMAT JSON)` 输出 → 无需数据库。
 - 结果页渲染：带严重度标注的**计划树**（点击节点跳转诊断）、按严重度分色的 findings 卡片、可一键复制的建议动作（CREATE INDEX / ANALYZE / SET work_mem）。
 
