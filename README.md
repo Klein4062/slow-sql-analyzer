@@ -52,6 +52,20 @@ cd slow-sql-analyzer
 go build -o slow-sql-analyzer ./cmd/slow-sql-analyzer
 ```
 
+### 内网部署（零依赖单文件）
+
+编译为**单个完全静态的二进制**，拷到内网目标机直接跑，不需要 Go/Python/`libpq`/`psql`：
+（实时连库用 pgx，已编译进二进制。）
+
+```bash
+make build-all        # 一次性交叉编译 Linux/macOS/Windows × amd64/arm64 → dist/
+# 把 dist/slow-sql-analyzer-linux-amd64 拷到内网机：
+scp dist/slow-sql-analyzer-linux-amd64 user@host:~/slow-sql-analyzer
+```
+
+构建机也无法联网时用 `make vendor` 后 `go build -mod=vendor` 离线构建。
+完整步骤（air-gapped 构建、systemd 服务、只读账号建议）见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
 ## 快速开始
 
 ### 离线分析（无需数据库）

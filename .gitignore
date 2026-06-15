@@ -1,6 +1,8 @@
 # Binaries
 /slow-sql-analyzer
 /bin/
+/dist/
+/vendor/
 *.exe
 
 # Test / coverage
