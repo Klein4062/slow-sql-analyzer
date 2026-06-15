@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/Klein4062/slow-sql-analyzer/internal/plan"
 )
@@ -87,7 +88,82 @@ func (s PostgresSource) Fetch() (*plan.PlanResult, error) {
 		return nil, err
 	}
 	result.SourceQuery = s.Query
+
+	// 统计新鲜度富化：查 pg_stat_user_tables，供 StaleStatistics 规则使用。
+	// 失败不致命（某些权限/版本下视图不可用），静默跳过即可。
+	if stats, err := s.queryTableStats(ctx, tx, result.Relations()); err == nil {
+		result.TableStats = stats
+	}
+
 	return result, nil
+}
+
+// queryTableStats fetches statistics-freshness columns for the given relations
+// from pg_stat_user_tables (user tables only). Relations not present in the
+// view (e.g. system catalogs) are silently skipped.
+//
+// 按裸表名 relname 匹配——真实计划的 EXPLAIN JSON 常省略 Schema 字段，
+// 故不能依赖 "schema.relname" 复合键。结果按 relname 建立（不同 schema 同名表极少见）。
+func (s PostgresSource) queryTableStats(ctx context.Context, tx pgx.Tx, qualified []string) (map[string]plan.TableStat, error) {
+	relnames := bareRelationNames(qualified)
+	if len(relnames) == 0 {
+		return nil, nil
+	}
+	const q = `SELECT schemaname, relname, n_live_tup, n_mod_since_analyze,
+	                  last_analyze, last_autoanalyze
+	           FROM pg_stat_user_tables
+	           WHERE relname = ANY($1)`
+	rows, err := tx.Query(ctx, q, relnames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make(map[string]plan.TableStat, len(relnames))
+	for rows.Next() {
+		var ts plan.TableStat
+		var lastAnalyze, lastAuto pgtype.Timestamptz
+		if err := rows.Scan(&ts.Schema, &ts.Relation, &ts.LiveTuples,
+			&ts.ModSinceAnalyze, &lastAnalyze, &lastAuto); err != nil {
+			return nil, err
+		}
+		if lastAnalyze.Valid {
+			ts.LastAnalyze = lastAnalyze.Time
+		}
+		if lastAuto.Valid {
+			ts.LastAutoAnalyze = lastAuto.Time
+		}
+		stats[ts.Relation] = ts
+	}
+	return stats, rows.Err()
+}
+
+// bareRelationNames strips any "schema." prefix and de-duplicates, so we can
+// match pg_stat_user_tables by relname regardless of whether the plan carried
+// a Schema field.
+func bareRelationNames(qualified []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, q := range qualified {
+		name := q
+		if i := lastDot(q); i >= 0 {
+			name = q[i+1:]
+		}
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func lastDot(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == '.' {
+			return i
+		}
+	}
+	return -1
 }
 
 func (s PostgresSource) timeoutOr() time.Duration {

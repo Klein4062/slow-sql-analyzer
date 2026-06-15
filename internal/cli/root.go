@@ -28,6 +28,7 @@ var (
 	flagCardRatio      float64
 	flagFilterRemoval  float64
 	flagBufferHitRatio float64
+	flagStaleModRatio  float64
 )
 
 // NewRootCmd builds the command tree.
@@ -47,6 +48,7 @@ func NewRootCmd() *cobra.Command {
 	pf.Float64Var(&flagCardRatio, "cardinality-ratio", 10, "actual-vs-estimated row ratio that flags a misestimate")
 	pf.Float64Var(&flagFilterRemoval, "filter-removal-ratio", 0.9, "fraction of rows a filter must discard to flag an inefficient scan")
 	pf.Float64Var(&flagBufferHitRatio, "buffer-hit-ratio", 0.9, "minimum shared-buffer hit ratio (below this is flagged)")
+	pf.Float64Var(&flagStaleModRatio, "stale-mod-ratio", 0.1, "fraction of live tuples modified since ANALYZE that flags stale statistics (live mode)")
 
 	root.AddCommand(newPlanCmd(), newAnalyzeCmd(), newServeCmd(), newVersionCmd())
 	return root
@@ -60,6 +62,7 @@ func buildConfig() config.Config {
 	c.Thresholds.CardinalityRatio = flagCardRatio
 	c.Thresholds.FilterRemovalRatio = flagFilterRemoval
 	c.Thresholds.BufferHitRatioMin = flagBufferHitRatio
+	c.Thresholds.StaleModRatio = flagStaleModRatio
 	c.Options.NoColor = flagNoColor
 	for _, r := range flagDisableRules {
 		c.Options.DisabledRules[r] = true

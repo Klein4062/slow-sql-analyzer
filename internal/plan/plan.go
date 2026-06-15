@@ -5,6 +5,35 @@
 // touches a database, so it can be unit-tested with fixture plans.
 package plan
 
+import "time"
+
+// TableStat is per-table statistics-freshness info from pg_stat_user_tables.
+// Populated only in live (pgx) mode by PostgresSource; nil/empty in offline or
+// command-connector mode, where the StaleStatistics rule simply does nothing.
+// 来自 pg_stat_user_tables 的每表统计新鲜度信息。仅实时 pgx 模式下填充。
+type TableStat struct {
+	Schema          string
+	Relation        string
+	LiveTuples      int64     // n_live_tup：当前估算活元组数
+	ModSinceAnalyze int64     // n_mod_since_analyze：自上次 ANALYZE 以来的修改行数
+	LastAnalyze     time.Time // 最近一次手动 ANALYZE（零值=从未）
+	LastAutoAnalyze time.Time // 最近一次 autovacuum 自动 ANALYZE（零值=从未）
+}
+
+// Analyzed reports whether the table has ever been analyzed (manually or auto).
+// Analyzed 报告该表是否曾被 ANALYZE（手动或自动）。
+func (ts TableStat) Analyzed() bool {
+	return !ts.LastAnalyze.IsZero() || !ts.LastAutoAnalyze.IsZero()
+}
+
+// QualifiedName returns schema.relation (or relation when no schema).
+func (ts TableStat) QualifiedName() string {
+	if ts.Schema != "" {
+		return ts.Schema + "." + ts.Relation
+	}
+	return ts.Relation
+}
+
 // PlanNode is a single node in a PostgreSQL execution plan tree.
 //
 // Field names/tags follow the exact keys produced by EXPLAIN FORMAT JSON
@@ -101,6 +130,33 @@ type PlanResult struct {
 	// (run with ANALYZE). Rules that depend on runtime numbers check this.
 	IsAnalyze   bool
 	SourceQuery string
+	// TableStats carries per-table statistics-freshness info (live pgx mode
+	// only). Keyed by "schema.relation". Empty when unavailable; the
+	// StaleStatistics rule then emits nothing.
+	TableStats map[string]TableStat
+}
+
+// Relations returns the distinct qualified relation names ("schema.relation")
+// referenced by scan nodes in the plan, in first-seen order. Used to scope the
+// statistics-freshness query in live mode.
+// 返回计划中扫描节点引用的去重表名（"schema.relation"），用于实时模式下限定统计查询范围。
+func (r *PlanResult) Relations() []string {
+	if r == nil || r.Root == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	ForEach(r.Root, func(node, parent *PlanNode, depth int) {
+		if node.RelationName == "" {
+			return
+		}
+		name := node.QualifiedName()
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	})
+	return out
 }
 
 // Has reports whether a raw EXPLAIN key was present on this node.

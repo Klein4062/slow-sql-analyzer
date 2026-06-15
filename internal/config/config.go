@@ -42,6 +42,15 @@ type Thresholds struct {
 	// NestedLoopMinLoops: a Nested Loop whose inner side is rescanned this many
 	// times (and the inner is an expensive scan) is flagged.
 	NestedLoopMinLoops float64
+
+	// StaleModRatio: a table is flagged as having stale statistics when rows
+	// modified since the last ANALYZE exceed this fraction of live tuples.
+	// 统计过时阈值：自上次 ANALYZE 以来修改行数占活元组数的比例（默认 10%）。
+	StaleModRatio float64
+	// StaleMinMods: absolute floor on modifications-since-analyze so small
+	// tables don't produce noise.
+	// 修改行数的绝对下限，避免小表噪声（默认 1000）。
+	StaleMinMods float64
 }
 
 // DefaultThresholds returns the built-in defaults.
@@ -56,6 +65,8 @@ func DefaultThresholds() Thresholds {
 		BufferMinBlocks:      128,
 		HotspotTimeFraction:  0.5,
 		NestedLoopMinLoops:   10,
+		StaleModRatio:        0.1,
+		StaleMinMods:         1000,
 	}
 }
 

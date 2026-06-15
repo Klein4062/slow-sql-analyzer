@@ -40,8 +40,8 @@ func Actions(findings []analyzer.Finding) []Action {
 		})
 	}
 
-	// ANALYZE for relations with misestimated cardinality.
-	analyzeRels := uniqueOrderedRelations(findings, "CardinalityMisestimate")
+	// ANALYZE for relations with misestimated cardinality OR stale statistics.
+	analyzeRels := uniqueOrderedRelations(findings, "CardinalityMisestimate", "StaleStatistics")
 	for _, rel := range analyzeRels {
 		actions = append(actions, Action{
 			Kind:        ActionAnalyze,
@@ -62,13 +62,17 @@ func Actions(findings []analyzer.Finding) []Action {
 	return actions
 }
 
-// uniqueOrderedRelations returns relations (Finding.RelationName) touched by the
-// given rule, in first-seen order, skipping empty/non-relation nodes.
-func uniqueOrderedRelations(findings []analyzer.Finding, rule string) []string {
+// uniqueOrderedRelations returns relations (Finding.RelationName) touched by any
+// of the given rules, in first-seen order, skipping empty/non-relation nodes.
+func uniqueOrderedRelations(findings []analyzer.Finding, rules ...string) []string {
+	want := make(map[string]bool, len(rules))
+	for _, r := range rules {
+		want[r] = true
+	}
 	var ordered []string
 	seen := map[string]bool{}
 	for _, f := range findings {
-		if f.Rule != rule || f.RelationName == "" {
+		if !want[f.Rule] || f.RelationName == "" {
 			continue
 		}
 		// "ANALYZE public.orders" — relations only, not synthetic node names.

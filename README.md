@@ -25,7 +25,7 @@ Suggested actions
 ## 特性
 
 - **三种界面**：CLI、HTTP JSON API（`/v1/plan`、`/v1/analyze`）、浏览器**可视化网页**（`GET /`，带可点击跳转的标注计划树）。
-- **8 条检测规则**，覆盖最常见的计划反模式：
+- **9 条检测规则**，覆盖最常见的计划反模式：
   | 规则 | 触发 | 建议 |
   |---|---|---|
   | `SeqScanLargeTable` | 大表全表扫描 | 在过滤列上建索引 |
@@ -36,6 +36,7 @@ Suggested actions
   | `InefficientFilter` | 过滤丢弃绝大多数行却未走索引 | 建索引到过滤列 |
   | `LowBufferHitRatio` | 缓冲命中率低 | 调大 `shared_buffers` |
   | `Hotspot` | 节点独占执行时间过高 | 指出瓶颈 |
+  | `StaleStatistics` | 统计信息过时（实时模式，查 `pg_stat_user_tables`） | `ANALYZE` 刷新统计 |
 - **CREATE INDEX 建议**自动从 `Filter`/`Index Cond` 提取列、按表聚合去重（启发式）。
 - **work_mem 建议值**按最大溢出量自动估算。
 - 依赖实际统计的规则在「仅估算」计划下自动跳过并提示。
@@ -172,7 +173,8 @@ curl -s localhost:8080/v1/analyze \
 | `--cardinality-ratio` | `10` | 标记基数误估的倍数 |
 | `--filter-removal-ratio` | `0.9` | 标记低效过滤的丢弃比例 |
 | `--buffer-hit-ratio` | `0.9` | 缓冲命中率下限 |
-| `--analyze` 专属 | | `--no-analyze` / `--allow-writes` / `--timeout` |
+| `--stale-mod-ratio` | `0.1` | 统计过时阈值：自 ANALYZE 以来修改占比（实时模式） |
+| `--analyze` 专属 | | `--no-analyze` / `--allow-writes` / `--timeout` / `--connector` / `--exec` |
 
 ## 项目结构
 
@@ -181,7 +183,7 @@ internal/
 ├── plan/       # EXPLAIN JSON 解析 + 计划树模型与遍历
 ├── source/     # 数据来源：FileSource（离线）/ PostgresSource（实时）
 ├── analyzer/   # 规则引擎（Finding / Severity / AnalysisContext / Report）
-├── rules/      # 8 条检测规则
+├── rules/      # 9 条检测规则
 ├── advise/     # CREATE INDEX / work_mem / ANALYZE 动作合成
 ├── report/     # text / json 渲染 + plan_tree 序列化
 ├── api/        # chi HTTP 路由 + 可视化网页

@@ -84,6 +84,15 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     `FORMAT JSON` 输出到 stdout，工具只解析其输出。默认仍是 pgx（直连，带只读事务/
     超时/写拦截安全网）；command 模式下这些安全控制交由用户的命令自行负责（文档已说明）。
     CLI/API/网页三处都支持切换；`source.PlanSource` 接口让两种连接器对分析层透明。
+13. **统计信息过时检测（StaleStatistics）**。基数误估的头号根因是统计陈旧，但此前只能在计划
+    里"事后"发现误估。新增主动检测：实时 pgx 模式下，`PostgresSource` 在拿计划的同时查
+    `pg_stat_user_tables`（`n_mod_since_analyze`/`last_analyze`/`last_autoanalyze`），把每表
+    新鲜度存进 `PlanResult.TableStats`；纯规则 `StaleStatistics` 消费它——修改占比 ≥ 10%
+    （`--stale-mod-ratio` 可调，且绝对量 ≥ 1000 避免小表噪声）或从未 ANALYZE 即判过时，
+    直接提示 `ANALYZE <table>`。保持规则纯函数（IO 留在 source 层）；离线/命令模式无此数据
+    时静默跳过。**踩坑**：真实 PG 17 的 EXPLAIN JSON 常省略 `Schema` 字段（手写 fixture 带了
+    schema，所以单测没暴露），导致按 "schema.relname" 匹配查不到表——改为按裸 `relname` 查询。
+    已用真实库端到端验证（ANALYZE 后再插 60% 行不分析 → 检出 62% 过时 + 给出 ANALYZE 建议）。
 
 ## 踩过的坑（值得记录）
 

@@ -14,5 +14,6 @@ func Default() []analyzer.Rule {
 		InefficientFilter{},
 		LowBufferHitRatio{},
 		Hotspot{},
+		StaleStatistics{},
 	}
 }
