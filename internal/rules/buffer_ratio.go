@@ -10,6 +10,9 @@ import (
 // LowBufferHitRatio flags nodes that read a lot from disk (cache misses) rather
 // than from the shared buffer cache. A low hit ratio on big scans suggests the
 // working set does not fit in shared_buffers.
+//
+// 触发条件：节点共享缓冲命中率 Hit/(Hit+Read) 低于阈值（默认 0.9），
+// 且总读取块数 >= 门槛（默认 128 块，忽略小扫描）。命中率低 → 数据未驻留内存。
 type LowBufferHitRatio struct{}
 
 // Name implements analyzer.Rule.
@@ -36,11 +39,11 @@ func (LowBufferHitRatio) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 		}
 
 		out = append(out, analyzer.Finding{
-			Severity:       severity,
-			Rule:           "LowBufferHitRatio",
-			NodeLabel:      node.Label(),
-			NodePath:       joinPath(path),
-			NodeType:       node.NodeType,
+			Severity:  severity,
+			Rule:      "LowBufferHitRatio",
+			NodeLabel: node.Label(),
+			NodePath:  joinPath(path),
+			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
 				"%s read %s blocks but only %s were cache hits (%s hit ratio)",
 				node.Label(),
@@ -49,9 +52,9 @@ func (LowBufferHitRatio) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 			Recommendation: "increase shared_buffers, or run the query again after warm-up; " +
 				"if this table is hot, ensure it fits in memory",
 			Evidence: map[string]any{
-				"shared_hit":   node.SharedHitBlocks,
-				"shared_read":  node.SharedReadBlocks,
-				"hit_ratio":    ratio,
+				"shared_hit":  node.SharedHitBlocks,
+				"shared_read": node.SharedReadBlocks,
+				"hit_ratio":   ratio,
 			},
 		})
 		return true

@@ -10,6 +10,8 @@ import (
 // DiskSort flags Sort nodes that spilled to disk (external merge sort). Disk
 // sorts are slow and usually indicate either too-low work_mem or a missing
 // index that could deliver rows pre-sorted.
+//
+// 触发条件：Sort 节点的 Sort Space Type 为 "Disk"（外部归并排序落盘）。
 type DiskSort struct{}
 
 // Name implements analyzer.Rule.
@@ -43,20 +45,20 @@ func (DiskSort) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 		}
 
 		out = append(out, analyzer.Finding{
-			Severity:       severity,
-			Rule:           "DiskSort",
-			NodeLabel:      node.Label(),
-			NodePath:       joinPath(path),
-			NodeType:       node.NodeType,
+			Severity:  severity,
+			Rule:      "DiskSort",
+			NodeLabel: node.Label(),
+			NodePath:  joinPath(path),
+			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
 				"sort spilled %s to disk using %q — in-memory sort would be much faster",
 				formatBytes(node.SortSpaceUsed), node.SortMethod,
 			),
 			Recommendation: rec,
 			Evidence: map[string]any{
-				"sort_method":    node.SortMethod,
-				"sort_space_kb":  node.SortSpaceUsed,
-				"sort_key":       node.SortKey,
+				"sort_method":   node.SortMethod,
+				"sort_space_kb": node.SortSpaceUsed,
+				"sort_key":      node.SortKey,
 			},
 		})
 		return true

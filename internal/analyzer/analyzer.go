@@ -34,6 +34,9 @@ type Report struct {
 // Run executes all enabled rules and returns their findings, sorted by
 // severity (critical first). Rules that require actual stats are expected to
 // self-skip when the plan was not run with ANALYZE.
+//
+// 依次运行所有「未被 --disable-rule 禁用」的规则，汇总 findings，并按严重度降序
+// （critical 在前）稳定排序。依赖真实统计的规则在仅估算计划下应自行返回空。
 func (a *Analyzer) Run(result *plan.PlanResult, cfg config.Config) Report {
 	ctx := NewContext(result, cfg.Thresholds)
 	var findings []Finding
@@ -43,6 +46,7 @@ func (a *Analyzer) Run(result *plan.PlanResult, cfg config.Config) Report {
 		}
 		findings = append(findings, r.Analyze(ctx)...)
 	}
+	// 严重度降序（critical > warning > info）；稳定排序保留同级别内的规则顺序。
 	sort.SliceStable(findings, func(i, j int) bool {
 		return findings[i].Severity > findings[j].Severity
 	})

@@ -25,9 +25,9 @@ type summary struct {
 }
 
 type actionJSON struct {
-	Indexes  []string `json:"indexes"`
-	Analyze  []string `json:"analyze"`
-	Config   []string `json:"config"`
+	Indexes []string `json:"indexes"`
+	Analyze []string `json:"analyze"`
+	Config  []string `json:"config"`
 }
 
 // RenderJSON produces a machine-readable JSON report.
@@ -58,10 +58,10 @@ func RenderJSON(m Model) ([]byte, error) {
 	}
 
 	rep := jsonReport{
-		Query:     m.Query,
-		Summary:   counts,
-		Findings:  m.Findings,
-		Actions:   aj,
+		Query:    m.Query,
+		Summary:  counts,
+		Findings: m.Findings,
+		Actions:  aj,
 	}
 	if m.Result != nil {
 		rep.IsAnalyze = m.Result.IsAnalyze

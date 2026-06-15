@@ -10,6 +10,9 @@ import (
 // InefficientFilter flags scans that read many rows and then throw most of them
 // away in a filter, without using an index. When 90%+ of scanned rows are
 // rejected, an index on the filter column would avoid reading them at all.
+//
+// 触发条件：扫描节点未走索引，且「被过滤丢弃的行 / (丢弃+保留)」>= 阈值（默认 0.9），
+// 同时总扫描行数 >= 最低门槛（默认 100，避免小表噪声）。需要 ANALYZE。
 type InefficientFilter struct{}
 
 // Name implements analyzer.Rule.
@@ -52,12 +55,12 @@ func (InefficientFilter) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 		}
 
 		out = append(out, analyzer.Finding{
-			Severity:       severity,
-			Rule:           "InefficientFilter",
-			NodeLabel:      node.Label(),
-			NodePath:       joinPath(path),
-			NodeType:       node.NodeType,
-			RelationName:   node.QualifiedName(),
+			Severity:     severity,
+			Rule:         "InefficientFilter",
+			NodeLabel:    node.Label(),
+			NodePath:     joinPath(path),
+			NodeType:     node.NodeType,
+			RelationName: node.QualifiedName(),
 			Problem: fmt.Sprintf(
 				"%s scanned %s rows but the filter %q discarded %s of them",
 				node.NodeType, formatRows(scanned), node.Filter, formatPct(ratio),

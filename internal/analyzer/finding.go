@@ -58,15 +58,15 @@ func (s Severity) MarshalJSON() ([]byte, error) {
 
 // Finding is one issue discovered by a rule, with a fix recommendation.
 type Finding struct {
-	Severity       Severity         `json:"severity"`
-	Rule           string           `json:"rule"`
-	NodeLabel      string           `json:"node_label"`
-	NodePath       string           `json:"node_path"`
-	NodeType       string           `json:"node_type"`
-	RelationName   string           `json:"relation,omitempty"`
-	Problem        string           `json:"problem"`
-	Recommendation string           `json:"recommendation"`
-	Evidence       map[string]any   `json:"evidence,omitempty"`
+	Severity       Severity       `json:"severity"`
+	Rule           string         `json:"rule"`
+	NodeLabel      string         `json:"node_label"`
+	NodePath       string         `json:"node_path"`
+	NodeType       string         `json:"node_type"`
+	RelationName   string         `json:"relation,omitempty"`
+	Problem        string         `json:"problem"`
+	Recommendation string         `json:"recommendation"`
+	Evidence       map[string]any `json:"evidence,omitempty"`
 }
 
 // AnalysisContext bundles everything a rule needs to inspect a plan.

@@ -77,7 +77,7 @@ type requestOptions struct {
 type planRequest struct {
 	Plan    json.RawMessage `json:"plan"`
 	Query   string          `json:"query"`
-	Options requestOptions   `json:"options"`
+	Options requestOptions  `json:"options"`
 }
 
 type queryRequest struct {

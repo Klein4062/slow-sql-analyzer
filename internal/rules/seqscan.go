@@ -9,6 +9,8 @@ import (
 
 // SeqScanLargeTable flags sequential scans over many rows, which usually means
 // a missing index for the query's filter columns.
+//
+// 触发条件：Seq Scan 且估算行数超过阈值（默认 1000，可经 --seqscan-rows 调整）。
 type SeqScanLargeTable struct{}
 
 // Name implements analyzer.Rule.
@@ -50,7 +52,7 @@ func (SeqScanLargeTable) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 			RelationName:   node.QualifiedName(),
 			Problem:        problem,
 			Recommendation: rec,
-			Evidence: indexEvidence(node.QualifiedName(), node.Alias, node.Filter, node.IndexCond, node.PlanRows),
+			Evidence:       indexEvidence(node.QualifiedName(), node.Alias, node.Filter, node.IndexCond, node.PlanRows),
 		})
 		return true
 	})

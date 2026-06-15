@@ -24,9 +24,9 @@ var (
 	flagNoColor      bool
 	flagDisableRules []string
 
-	flagSeqScanRows   float64
-	flagCardRatio     float64
-	flagFilterRemoval float64
+	flagSeqScanRows    float64
+	flagCardRatio      float64
+	flagFilterRemoval  float64
 	flagBufferHitRatio float64
 )
 

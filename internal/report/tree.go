@@ -11,15 +11,15 @@ import (
 // Findings holds indices into the report's findings[] for nodes that were
 // flagged, so the UI can annotate the tree.
 type treeNode struct {
-	Label         string   `json:"label"`
-	NodeType      string   `json:"node_type"`
-	Depth         int      `json:"depth"`
-	EstimatedRows float64  `json:"estimated_rows,omitempty"`
-	ActualRows    *float64 `json:"actual_rows,omitempty"`
-	Loops         float64  `json:"loops,omitempty"`
-	TimeMs        float64  `json:"time_ms,omitempty"`
-	Cost          float64  `json:"cost,omitempty"`
-	Findings      []int    `json:"findings,omitempty"`
+	Label         string     `json:"label"`
+	NodeType      string     `json:"node_type"`
+	Depth         int        `json:"depth"`
+	EstimatedRows float64    `json:"estimated_rows,omitempty"`
+	ActualRows    *float64   `json:"actual_rows,omitempty"`
+	Loops         float64    `json:"loops,omitempty"`
+	TimeMs        float64    `json:"time_ms,omitempty"`
+	Cost          float64    `json:"cost,omitempty"`
+	Findings      []int      `json:"findings,omitempty"`
 	Children      []treeNode `json:"children,omitempty"`
 }
 

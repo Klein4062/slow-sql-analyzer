@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fatih/color"
-	isatty "github.com/mattn/go-isatty"
 	"github.com/Klein4062/slow-sql-analyzer/internal/advise"
 	"github.com/Klein4062/slow-sql-analyzer/internal/analyzer"
 	"github.com/Klein4062/slow-sql-analyzer/internal/plan"
+	"github.com/fatih/color"
+	isatty "github.com/mattn/go-isatty"
 )
 
 // isColorEnabled reports whether stdout is a terminal (so ANSI codes are

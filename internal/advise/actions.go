@@ -13,9 +13,9 @@ import (
 type ActionKind string
 
 const (
-	ActionIndex  ActionKind = "index"
+	ActionIndex   ActionKind = "index"
 	ActionAnalyze ActionKind = "analyze"
-	ActionConfig ActionKind = "config"
+	ActionConfig  ActionKind = "config"
 )
 
 // Action is a single recommended, usually executable, step.
@@ -105,6 +105,7 @@ func workMemSuggestion(findings []analyzer.Finding) string {
 		return ""
 	}
 	// Suggest ~1.5x the spill size, min 4MB, rounded to a sane value.
+	// 按最大溢出量的约 1.5 倍建议 work_mem（留余量确保下次能放回内存），下限 4MB。
 	mb := int(math.Ceil(float64(maxKB) / 1024.0 * 1.5))
 	if mb < 4 {
 		mb = 4

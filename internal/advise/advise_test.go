@@ -9,10 +9,10 @@ import (
 
 func TestExtractColumnsFor(t *testing.T) {
 	cases := []struct {
-		name   string
-		cond   string
-		alias  string
-		want   []string
+		name  string
+		cond  string
+		alias string
+		want  []string
 	}{
 		{"cast and literal", "((status)::text = 'pending'::text)", "orders", []string{"status"}},
 		{"join keeps inner", "(user_id = u.id)", "o", []string{"user_id"}},

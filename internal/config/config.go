@@ -4,6 +4,9 @@ package config
 // Thresholds are the numeric cut-offs used by analysis rules. They carry
 // documented defaults so the tool works out of the box; each is overridable
 // via CLI flags.
+//
+// 各规则的数值阈值，都带开箱即用的默认值，并可通过 CLI flag（如 --seqscan-rows）
+// 覆盖。DefaultThresholds() 集中维护默认值。
 type Thresholds struct {
 	// SeqScanRowThreshold: a Seq Scan whose estimated row count meets this is
 	// flagged as a large-table scan (potential missing index).
@@ -44,15 +47,15 @@ type Thresholds struct {
 // DefaultThresholds returns the built-in defaults.
 func DefaultThresholds() Thresholds {
 	return Thresholds{
-		SeqScanRowThreshold:   1000,
-		CardinalityRatio:      10,
-		CardinalityMinActual:  10,
-		FilterRemovalRatio:    0.9,
-		FilterMinScanned:      100,
-		BufferHitRatioMin:     0.9,
-		BufferMinBlocks:       128,
-		HotspotTimeFraction:   0.5,
-		NestedLoopMinLoops:    10,
+		SeqScanRowThreshold:  1000,
+		CardinalityRatio:     10,
+		CardinalityMinActual: 10,
+		FilterRemovalRatio:   0.9,
+		FilterMinScanned:     100,
+		BufferHitRatioMin:    0.9,
+		BufferMinBlocks:      128,
+		HotspotTimeFraction:  0.5,
+		NestedLoopMinLoops:   10,
 	}
 }
 

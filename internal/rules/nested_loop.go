@@ -11,6 +11,9 @@ import (
 // many times and is itself an expensive scan (worst case: a Seq Scan). Each
 // outer row re-runs the inner scan, so the cost multiplies — this is one of the
 // most damaging patterns and usually means the inner side lacks a useful index.
+//
+// 触发条件：Nested Loop 的内表被重复扫描（Actual Loops >= 阈值），且内表本身是
+// 昂贵扫描（最坏是 Seq Scan——外层每行都全表扫一次，代价成倍放大）。需要 ANALYZE。
 type NestedLoopExpensiveInner struct{}
 
 // Name implements analyzer.Rule.
@@ -58,11 +61,11 @@ func (NestedLoopExpensiveInner) Analyze(ctx *analyzer.AnalysisContext) []analyze
 		}
 
 		out = append(out, analyzer.Finding{
-			Severity:       severity,
-			Rule:           "NestedLoopExpensiveInner",
-			NodeLabel:      node.Label(),
-			NodePath:       joinPath(path),
-			NodeType:       node.NodeType,
+			Severity:  severity,
+			Rule:      "NestedLoopExpensiveInner",
+			NodeLabel: node.Label(),
+			NodePath:  joinPath(path),
+			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
 				"Nested Loop re-executes its inner side %s times; %s",
 				formatRows(loops), detail,

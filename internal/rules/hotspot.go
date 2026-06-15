@@ -42,18 +42,18 @@ func (Hotspot) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 		}
 
 		out = append(out, analyzer.Finding{
-			Severity:       analyzer.SeverityWarning,
-			Rule:           "Hotspot",
-			NodeLabel:      node.Label(),
-			NodePath:       joinPath(path),
-			NodeType:       node.NodeType,
+			Severity:  analyzer.SeverityWarning,
+			Rule:      "Hotspot",
+			NodeLabel: node.Label(),
+			NodePath:  joinPath(path),
+			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
 				"%s spends ~%.1f ms of its own time — %.0f%% of total execution time",
 				node.Label(), exclusive, frac*100,
 			),
 			Recommendation: "this is the main time sink; prioritize fixing any findings on this node or its subtree",
 			Evidence: map[string]any{
-				"exclusive_ms":     exclusive,
+				"exclusive_ms":      exclusive,
 				"fraction_of_total": frac,
 			},
 		})
@@ -65,6 +65,10 @@ func (Hotspot) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 
 // exclusiveTime returns the node's own time: its total time minus the total
 // time of its direct children (per-loop figures, as PostgreSQL reports them).
+//
+// 计算「独占耗时」= 节点总耗时 - 各直接子节点总耗时。用独占而非累计，是为了
+// 避免把根节点（天然≈总执行时间）反复标记为热点；真正花时间的叶子扫描/排序节点
+// 才会被高亮。PG 的 ActualTotalTime 是「每轮循环」口径，这里按同口径相减。
 func exclusiveTime(node *plan.PlanNode) float64 {
 	exclusive := node.ActualTotalTime
 	for _, c := range node.Plans {
@@ -73,7 +77,7 @@ func exclusiveTime(node *plan.PlanNode) float64 {
 		}
 	}
 	if exclusive < 0 {
-		exclusive = 0
+		exclusive = 0 // 浮点相减可能产生极小负值，钳到 0
 	}
 	return exclusive
 }
