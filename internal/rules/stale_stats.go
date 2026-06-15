@@ -10,13 +10,23 @@ import (
 	"github.com/Klein4062/slow-sql-analyzer/internal/plan"
 )
 
-// StaleStatistics flags relations whose planner statistics are stale: either a
-// large fraction of rows changed since the last ANALYZE (so the planner's
-// estimates are likely off), or the table has never been analyzed at all.
+// StaleStatistics flags relations whose planner statistics are likely stale or
+// insufficient, and recommends ANALYZE. It uses two complementary signals:
 //
-// 触发条件：自上次 ANALYZE 以来修改行数占比 >= 阈值（默认 10%，且绝对量 >= 1000），
-// 或有数据却从未 ANALYZE。统计新鲜度数据仅在实时 pgx 模式下可用（PlanResult.TableStats）；
-// 离线/命令连接器模式下 TableStats 为空，本规则不输出。
+//  1. Live (pgx) mode — PlanResult.TableStats is populated from
+//     pg_stat_user_tables. A table is flagged when rows modified since the last
+//     ANALYZE exceed a fraction of live tuples, or it was never analyzed. This
+//     is the "cause" signal (high confidence). When the table ALSO shows a
+//     cardinality misestimate in the plan, severity is bumped to critical
+//     (cause + symptom agree).
+//
+//  2. Offline / command-connector mode — no catalog access, so we fall back to
+//     the plan's estimated-vs-actual row mismatch at base-table scans as an
+//     indirect "the stats are probably the problem" signal (lower confidence,
+//     clearly labeled as inferred).
+//
+// 触发：实时模式按 n_mod_since_analyze（病因）+ 与基数偏差交叉印证；
+// 离线模式退化为「scan 节点估算 vs 实际偏差」推断（低置信）。
 type StaleStatistics struct{}
 
 // Name implements analyzer.Rule.
@@ -24,21 +34,31 @@ func (StaleStatistics) Name() string { return "StaleStatistics" }
 
 // Analyze implements analyzer.Rule.
 func (StaleStatistics) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
-	if ctx.Result == nil || len(ctx.Result.TableStats) == 0 {
-		return nil // 无统计新鲜度数据（离线/命令模式），直接跳过。
+	if ctx.Result == nil || ctx.Result.Root == nil {
+		return nil
 	}
-	var out []analyzer.Finding
-	t := ctx.Thresholds
+	misByRel := scanMisestimateByRelation(ctx.Result.Root, ctx.Thresholds)
 
-	// 按表名排序，保证输出稳定。
-	keys := make([]string, 0, len(ctx.Result.TableStats))
-	for k := range ctx.Result.TableStats {
+	// 有 pg_stat 数据（实时 pgx 模式）：病因驱动 + 交叉印证。
+	if len(ctx.Result.TableStats) > 0 {
+		return liveStaleFindings(ctx.Result.TableStats, misByRel, ctx.Thresholds)
+	}
+	// 离线/命令模式：无系统视图，退化为基数偏差推断。
+	return offlineStaleFindings(misByRel)
+}
+
+// --- live mode: pg_stat-driven (cause) + cardinality cross-reference ---
+
+func liveStaleFindings(stats map[string]plan.TableStat, misByRel map[string]scanMis, t config.Thresholds) []analyzer.Finding {
+	keys := make([]string, 0, len(stats))
+	for k := range stats {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
+	var out []analyzer.Finding
 	for _, k := range keys {
-		ts := ctx.Result.TableStats[k]
+		ts := stats[k]
 		stale, ratio, reason := assessStale(ts, t)
 		if !stale {
 			continue
@@ -49,6 +69,25 @@ func (StaleStatistics) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding
 			severity = analyzer.SeverityCritical
 		}
 
+		problem := describeProblem(ts, ratio, reason)
+		ev := map[string]any{
+			"live_tuples":       ts.LiveTuples,
+			"mod_since_analyze": ts.ModSinceAnalyze,
+			"mod_ratio":         ratio,
+			"last_analyze":      zeroTimeStr(ts.LastAnalyze),
+			"last_autoanalyze":  zeroTimeStr(ts.LastAutoAnalyze),
+			"reason":            reason,
+			"mode":              "pg_stat",
+		}
+
+		// 交叉印证：该表在计划里也出现基数偏差 → 病因+症状吻合，升 critical。
+		if mis, ok := misByRel[ts.Relation]; ok {
+			severity = analyzer.SeverityCritical
+			problem += fmt.Sprintf("; a cardinality mismatch in the plan (%.0fx) confirms it", mis.Ratio)
+			ev["confirmed_by_cardinality"] = true
+			ev["cardinality_ratio"] = mis.Ratio
+		}
+
 		out = append(out, analyzer.Finding{
 			Severity:       severity,
 			Rule:           "StaleStatistics",
@@ -56,34 +95,98 @@ func (StaleStatistics) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding
 			NodePath:       ts.QualifiedName(),
 			NodeType:       "TableStatistics",
 			RelationName:   ts.QualifiedName(),
-			Problem:        describeProblem(ts, ratio, reason),
+			Problem:        problem,
 			Recommendation: fmt.Sprintf("run ANALYZE %s to refresh planner statistics", ts.QualifiedName()),
+			Evidence:       ev,
+		})
+	}
+	return out
+}
+
+// --- offline fallback: inferred from estimated-vs-actual mismatch ---
+
+func offlineStaleFindings(misByRel map[string]scanMis) []analyzer.Finding {
+	if len(misByRel) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(misByRel))
+	for k := range misByRel {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var out []analyzer.Finding
+	for _, k := range keys {
+		mis := misByRel[k]
+		out = append(out, analyzer.Finding{
+			Severity:     analyzer.SeverityWarning,
+			Rule:         "StaleStatistics",
+			NodeLabel:    "Statistics for " + mis.Qualified,
+			NodePath:     mis.Qualified,
+			NodeType:     "TableStatistics",
+			RelationName: mis.Qualified,
+			Problem: fmt.Sprintf(
+				"%s: estimated %s but actual %s rows (~%.0fx off) — statistics may be stale or insufficient",
+				mis.Qualified, formatRows(mis.Estimate), formatRows(mis.Actual), mis.Ratio,
+			),
+			Recommendation: "run ANALYZE to refresh statistics; if the predicate columns are correlated, " +
+				"also CREATE STATISTICS (inferred from the plan — no live catalog data available)",
 			Evidence: map[string]any{
-				"live_tuples":       ts.LiveTuples,
-				"mod_since_analyze": ts.ModSinceAnalyze,
-				"mod_ratio":         ratio,
-				"last_analyze":      zeroTimeStr(ts.LastAnalyze),
-				"last_autoanalyze":  zeroTimeStr(ts.LastAutoAnalyze),
-				"reason":            reason,
+				"mode":              "inferred",
+				"estimated_rows":    mis.Estimate,
+				"actual_rows":       mis.Actual,
+				"cardinality_ratio": mis.Ratio,
 			},
 		})
 	}
 	return out
 }
 
-// assessStale decides whether a table's stats are stale. Returns the (stale,
-// modification-ratio, human-readable reason).
+// scanMisestimateByRelation walks base-table scan nodes and, for each relation
+// whose estimated-vs-actual rows cross the cardinality threshold, records the
+// worst mismatch. Keyed by bare relation name (to cross-reference TableStats).
+// 遍历基础表 scan 节点，按表记录最严重的基数偏差（用于交叉印证与离线回退）。
+func scanMisestimateByRelation(root *plan.PlanNode, t config.Thresholds) map[string]scanMis {
+	m := map[string]scanMis{}
+	plan.ForEach(root, func(node, parent *plan.PlanNode, depth int) {
+		if node.RelationName == "" || !node.IsScan() {
+			return
+		}
+		ratio, ok := cardinalityRatio(node, t)
+		if !ok {
+			return
+		}
+		if prev, exists := m[node.RelationName]; !exists || ratio > prev.Ratio {
+			m[node.RelationName] = scanMis{
+				Ratio:     ratio,
+				Qualified: node.QualifiedName(),
+				Estimate:  node.PlanRows,
+				Actual:    node.ActualRows,
+			}
+		}
+	})
+	return m
+}
+
+// scanMis carries the worst cardinality mismatch observed for a relation.
+type scanMis struct {
+	Ratio     float64
+	Qualified string
+	Estimate  float64
+	Actual    float64
+}
+
+// assessStale decides whether a table's stats are stale (live mode). Returns
+// (stale, modification-ratio, human-readable reason).
 func assessStale(ts plan.TableStat, t config.Thresholds) (bool, float64, string) {
 	never := !ts.Analyzed()
 	if never && ts.LiveTuples > 0 {
-		// 从未 ANALYZE 且表里有数据 → 统计必然缺失/不准。
 		return true, 1.0, "never analyzed"
 	}
 	if ts.LiveTuples <= 0 {
 		return false, 0, ""
 	}
 	ratio := float64(ts.ModSinceAnalyze) / float64(ts.LiveTuples)
-	// 同时要求比例达标且绝对量过门槛，避免小表噪声。
 	if ratio >= t.StaleModRatio && ts.ModSinceAnalyze >= int64(t.StaleMinMods) {
 		return true, ratio, fmt.Sprintf("%.0f%% of rows changed since last ANALYZE", ratio*100)
 	}

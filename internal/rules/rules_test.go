@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,5 +146,82 @@ func TestStaleStatisticsActionsProduceAnalyze(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected ANALYZE public.orders action, got %+v", actions)
+	}
+}
+
+// scanPlan builds a minimal single-scan plan for stale-stats tests (parsed so
+// HasActual/present are populated correctly).
+func scanPlan(t *testing.T, relation string, estRows, actRows float64) *plan.PlanResult {
+	t.Helper()
+	js := fmt.Sprintf(
+		`[{"Plan":{"Node Type":"Seq Scan","Relation Name":%q,"Plan Rows":%v,"Actual Rows":%v,"Actual Loops":1},"Execution Time":1.0}]`,
+		relation, estRows, actRows,
+	)
+	res, err := plan.Parse([]byte(js))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestStaleStatisticsCrossRefBumpsToCritical(t *testing.T) {
+	// 实时模式：表统计过时 + 计划里该表基数偏差 → 病因+症状吻合，升 critical。
+	res := scanPlan(t, "orders", 1, 100000) // 100000x 误估
+	res.TableStats = map[string]plan.TableStat{
+		"orders": {Schema: "public", Relation: "orders", LiveTuples: 1000000, ModSinceAnalyze: 200000}, // 20% 过时
+	}
+	ctx := analyzer.NewContext(res, config.DefaultThresholds())
+	fs := StaleStatistics{}.Analyze(ctx)
+	if len(fs) != 1 {
+		t.Fatalf("want 1 finding, got %d", len(fs))
+	}
+	if fs[0].Severity != analyzer.SeverityCritical {
+		t.Errorf("cross-ref should bump to critical, got %s", fs[0].Severity)
+	}
+	if fs[0].Evidence["confirmed_by_cardinality"] != true {
+		t.Error("expected confirmed_by_cardinality=true")
+	}
+	if fs[0].Evidence["mode"] != "pg_stat" {
+		t.Errorf("expected mode=pg_stat, got %v", fs[0].Evidence["mode"])
+	}
+}
+
+func TestStaleStatisticsOfflineFallbackFromMisestimate(t *testing.T) {
+	// 离线模式：无 TableStats，仅计划基数偏差 → 低置信推断提示统计可能过时。
+	res := scanPlan(t, "orders", 1, 100000) // 无 TableStats
+	ctx := analyzer.NewContext(res, config.DefaultThresholds())
+	fs := StaleStatistics{}.Analyze(ctx)
+	if len(fs) != 1 {
+		t.Fatalf("want 1 inferred finding, got %d", len(fs))
+	}
+	if fs[0].Severity != analyzer.SeverityWarning {
+		t.Errorf("inferred should be warning, got %s", fs[0].Severity)
+	}
+	if fs[0].Evidence["mode"] != "inferred" {
+		t.Errorf("expected mode=inferred, got %v", fs[0].Evidence["mode"])
+	}
+	if fs[0].RelationName != "orders" {
+		t.Errorf("expected relation orders, got %s", fs[0].RelationName)
+	}
+	// 该推断 finding 也应产出 ANALYZE 动作。
+	if has := func() bool {
+		for _, a := range advise.Actions(fs) {
+			if a.Kind == advise.ActionAnalyze {
+				return true
+			}
+		}
+		return false
+	}(); !has {
+		t.Error("expected an ANALYZE action from the inferred finding")
+	}
+}
+
+func TestStaleStatisticsOfflineNoMisestimateIsNoop(t *testing.T) {
+	// 离线模式且无基数偏差（估算=实际）→ 不应产出推断 finding。
+	res := scanPlan(t, "orders", 1000, 1000)
+	ctx := analyzer.NewContext(res, config.DefaultThresholds())
+	fs := (StaleStatistics{}).Analyze(ctx)
+	if len(fs) != 0 {
+		t.Errorf("expected 0 findings when no misestimate, got %d", len(fs))
 	}
 }

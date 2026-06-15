@@ -36,7 +36,7 @@ Suggested actions
   | `InefficientFilter` | 过滤丢弃绝大多数行却未走索引 | 建索引到过滤列 |
   | `LowBufferHitRatio` | 缓冲命中率低 | 调大 `shared_buffers` |
   | `Hotspot` | 节点独占执行时间过高 | 指出瓶颈 |
-  | `StaleStatistics` | 统计信息过时（实时模式，查 `pg_stat_user_tables`） | `ANALYZE` 刷新统计 |
+  | `StaleStatistics` | 统计过时/不足：实时模式查 `pg_stat_user_tables`（高置信），离线模式按估算 vs 实际偏差推断 | `ANALYZE` 刷新统计 |
 - **CREATE INDEX 建议**自动从 `Filter`/`Index Cond` 提取列、按表聚合去重（启发式）。
 - **work_mem 建议值**按最大溢出量自动估算。
 - 依赖实际统计的规则在「仅估算」计划下自动跳过并提示。

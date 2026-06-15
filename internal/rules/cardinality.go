@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/Klein4062/slow-sql-analyzer/internal/analyzer"
+	"github.com/Klein4062/slow-sql-analyzer/internal/config"
 	"github.com/Klein4062/slow-sql-analyzer/internal/plan"
 )
 
@@ -27,26 +28,12 @@ func (CardinalityMisestimate) Analyze(ctx *analyzer.AnalysisContext) []analyzer.
 	t := ctx.Thresholds
 
 	plan.WalkPath(ctx.Result.Root, func(node, parent *plan.PlanNode, depth int, path []string) bool {
-		if !node.HasActual() {
+		ratio, ok := cardinalityRatio(node, t)
+		if !ok {
 			return true
 		}
 		actual := node.ActualRows
 		estimate := node.PlanRows
-		// 实际行数过小时比率噪声大（少量行的倍数偏差不具参考意义），跳过。
-		if actual < t.CardinalityMinActual {
-			return true
-		}
-
-		// 偏差倍数 = max(实际/估算, 估算/实际)，取双向最大值（高估和低估都算误估）。
-		var ratio float64
-		if estimate <= 0 {
-			ratio = math.Inf(1) // 估算为 0 却实际有行 → 无穷偏差
-		} else {
-			ratio = math.Max(actual/estimate, estimate/actual)
-		}
-		if ratio < t.CardinalityRatio { // 默认阈值 10 倍
-			return true
-		}
 
 		// 判断是高估还是低估：低估更危险（会导致选错 join 方式、哈希表过小）。
 		direction := "under-estimated"
@@ -103,4 +90,32 @@ func relationOrNode(n *plan.PlanNode) string {
 		return n.QualifiedName()
 	}
 	return n.NodeType
+}
+
+// cardinalityRatio returns the actual-vs-estimated row mismatch for a node:
+// ratio = max(actual/estimate, estimate/actual) (>=1; +Inf when estimated 0 but
+// actual > 0). ok is false (ratio 0) when the node lacks actual stats, the
+// actual count is below CardinalityMinActual (too noisy), or the mismatch is
+// below CardinalityRatio. Shared by CardinalityMisestimate and StaleStatistics.
+//
+// 共享的基数偏差计算：返回偏差倍数与是否达到误估阈值。供 CardinalityMisestimate
+// 与 StaleStatistics（离线回退/交叉印证）复用，避免逻辑重复。
+func cardinalityRatio(node *plan.PlanNode, t config.Thresholds) (ratio float64, ok bool) {
+	if !node.HasActual() {
+		return 0, false
+	}
+	actual := node.ActualRows
+	if actual < t.CardinalityMinActual {
+		return 0, false
+	}
+	estimate := node.PlanRows
+	if estimate <= 0 {
+		ratio = math.Inf(1)
+	} else {
+		ratio = math.Max(actual/estimate, estimate/actual)
+	}
+	if ratio < t.CardinalityRatio {
+		return 0, false
+	}
+	return ratio, true
 }

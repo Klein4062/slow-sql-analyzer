@@ -93,6 +93,14 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     时静默跳过。**踩坑**：真实 PG 17 的 EXPLAIN JSON 常省略 `Schema` 字段（手写 fixture 带了
     schema，所以单测没暴露），导致按 "schema.relname" 匹配查不到表——改为按裸 `relname` 查询。
     已用真实库端到端验证（ANALYZE 后再插 60% 行不分析 → 检出 62% 过时 + 给出 ANALYZE 建议）。
+14. **StaleStatistics 双信号 + 置信分级**。原版只在实时模式用 pg_stat 检测，离线/命令模式完全
+    盲。改为两个互补信号：实时模式仍用 `n_mod_since_analyze`（**病因**，高置信），并**与计划里
+    的基数偏差交叉印证**——若某表既统计过时又在计划里估算 vs 实际严重偏差，病因+症状吻合，
+    直接升 critical 并在证据里标 `confirmed_by_cardinality`；离线/命令模式无系统视图，**退化为
+    「该表 scan 节点估算 vs 实际偏差」推断**（`mode: inferred`，warning，明确标注为推断）。
+    抽取共享 `cardinalityRatio` helper 供 Cardinality 与 Stale 复用，避免逻辑重复。注意偏差≠过时
+    （列相关/表达式/JOIN 也会误估），故离线推断置信度低于实时，建议文案区分 ANALYZE 与
+    CREATE STATISTICS。离线 fixture（无 DB）现也能给出"该 ANALYZE 了"的提示。
 
 ## 踩过的坑（值得记录）
 
