@@ -40,7 +40,10 @@ Suggested actions
 - **CREATE INDEX 建议**自动从 `Filter`/`Index Cond` 提取列、按表聚合去重（启发式）。
 - **work_mem 建议值**按最大溢出量自动估算。
 - 依赖实际统计的规则在「仅估算」计划下自动跳过并提示。
+- 分析结果**中文输出**，技术名词（Seq Scan / ANALYZE / work_mem / 规则名等）保留英文。
 - 分析层为**纯函数、零 IO**，可完整单测，易于扩展（未来支持 MySQL 只需新增 source 适配器）。
+
+> 规则的完整说明（通用 / 实时独有 / 离线独有三类）见运行中的 [`/rules`](http://localhost:8080/rules) 页面或下方[规则表](#特性)。
 
 ## 安装
 
@@ -50,9 +53,9 @@ Suggested actions
 
 ```bash
 curl -L -o slow-sql-analyzer \
-  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.3.0/slow-sql-analyzer-linux-amd64
+  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.4.0/slow-sql-analyzer-linux-amd64
 chmod +x slow-sql-analyzer
-./slow-sql-analyzer version   # v0.3.0
+./slow-sql-analyzer version   # v0.4.0
 ```
 
 **方式二：从源码构建**
@@ -143,8 +146,9 @@ slow-sql-analyzer serve --addr :8080 --dsn "postgres://..."
 启动后浏览器打开 `http://localhost:8080/` 即可使用**可视化网页**：
 
 - **实时**模式：填 SQL（可选 DSN/超时/是否 ANALYZE/允许写）→ 服务端跑 EXPLAIN；连接器可在「pgx 内置驱动」与「command 自定义客户端」间切换；
-- **离线**模式：粘贴 `EXPLAIN (FORMAT JSON)` 输出 → 无需数据库。
+- **离线**模式：粘贴 `EXPLAIN (FORMAT JSON)` 输出 → 无需数据库（附「如何获取离线计划」命令提示与丰富示例，一键载入）。
 - 结果页渲染：带严重度标注的**计划树**（点击节点跳转诊断）、按严重度分色的 findings 卡片、可一键复制的建议动作（CREATE INDEX / ANALYZE / SET work_mem）。
+- 另有 **`/rules` 规则说明页**：按通用 / 实时独有 / 离线独有三类展示全部规则及其触发条件与建议。
 
 JSON API 端点同时可用：
 

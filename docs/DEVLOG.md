@@ -101,6 +101,16 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     抽取共享 `cardinalityRatio` helper 供 Cardinality 与 Stale 复用，避免逻辑重复。注意偏差≠过时
     （列相关/表达式/JOIN 也会误估），故离线推断置信度低于实时，建议文案区分 ANALYZE 与
     CREATE STATISTICS。离线 fixture（无 DB）现也能给出"该 ANALYZE 了"的提示。
+15. **结果中文化 + 离线获取示例 + 规则说明页（可用性打磨）**。
+    - 把所有规则的 Problem/Recommendation、advise 动作描述、文本报告框架改为中文，
+      **技术名词保留英文**（节点类型 Seq Scan/Index Scan/Hash Join/Nested Loop、SQL
+      ANALYZE/CREATE INDEX/CREATE STATISTICS、参数 work_mem/shared_buffers/cost、规则名、
+      severity）。`examples/sample-report.json` 重新生成；测试断言同步。
+    - 离线模式补充「如何获取离线计划」可折叠提示（带可复制的 `psql -t -A` 命令），
+      并把内置示例从极简 SeqScan 换成丰富的 disk_sort_and_hash 计划（触发多规则）。
+    - 新增「分析规则说明」页 `GET /rules`，按**通用 / 实时独有 / 离线独有**三类展示全部规则。
+      以 `rules.Catalog()` 作为单一数据源（页面与 `/v1/rules` 共用，避免与代码漂移）；
+      StaleStatistics 因在实时/离线行为不同而归入两个独有类。测试断言三类齐全 + 9 个规则名全覆盖。
 
 ## 踩过的坑（值得记录）
 
