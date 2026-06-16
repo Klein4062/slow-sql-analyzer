@@ -1,6 +1,8 @@
 package report
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,5 +67,60 @@ func TestRenderJSONRoundTrips(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("json output missing %q\n%s", want, s)
 		}
+	}
+}
+
+// TestJSONActionsArraysNeverNull ensures empty action groups serialize as []
+// (not null), giving API consumers a stable contract.
+func TestJSONActionsArraysNeverNull(t *testing.T) {
+	// Model with no findings -> no actions.
+	data, err := RenderJSON(Model{
+		Result:   loadFixture(t, "seqscan_large.json"),
+		Findings: []analyzer.Finding{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Actions struct {
+			Indexes []string `json:"indexes"`
+			Analyze []string `json:"analyze"`
+			Config  []string `json:"config"`
+		} `json:"actions"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Actions.Indexes == nil || got.Actions.Analyze == nil || got.Actions.Config == nil {
+		t.Errorf("action arrays must be [] not null: %+v", got.Actions)
+	}
+}
+
+// TestExampleReportIsUpToDate asserts the checked-in examples/sample-report.json
+// matches a fresh render from its source fixture — so the documented example
+// never silently drifts from real output. If this fails, regenerate:
+//
+//	slow-sql-analyzer plan -f testdata/disk_sort_and_hash.json --format json > examples/sample-report.json
+func TestExampleReportIsUpToDate(t *testing.T) {
+	examplePath := filepath.Join("..", "..", "examples", "sample-report.json")
+	want, err := os.ReadFile(examplePath)
+	if err != nil {
+		t.Fatalf("read example: %v", err)
+	}
+	// Re-render from the fixture via the same pipeline the CLI uses.
+	result := loadFixture(t, "disk_sort_and_hash.json")
+	a := analyzer.New(rules.Default())
+	rep := a.Run(result, config.Default())
+	got, err := RenderJSON(Model{
+		Result:   result,
+		Findings: rep.Findings,
+		Actions:  advise.Actions(rep.Findings),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace(want)) {
+		t.Errorf("examples/sample-report.json is stale. Regenerate with:\n" +
+			"  go run ./cmd/slow-sql-analyzer plan -f testdata/disk_sort_and_hash.json --format json > examples/sample-report.json")
 	}
 }

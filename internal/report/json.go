@@ -44,7 +44,9 @@ func RenderJSON(m Model) ([]byte, error) {
 		}
 	}
 
-	aj := actionJSON{}
+	// Pre-initialize slices so empty arrays serialize as [] (not null), giving
+	// API consumers a stable contract.
+	aj := actionJSON{Indexes: []string{}, Analyze: []string{}, Config: []string{}}
 	for _, a := range m.Actions {
 		sql := a.SQL
 		switch a.Kind {

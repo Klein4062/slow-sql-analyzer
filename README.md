@@ -162,6 +162,42 @@ curl -s localhost:8080/v1/analyze \
 
 端点：`POST /v1/plan`、`POST /v1/analyze`、`GET /healthz`。
 
+## JSON 输出结构
+
+`--format json`（CLI）和 HTTP API 返回同一份结构。完整真实示例见 [`examples/sample-report.json`](examples/sample-report.json)（由 `testdata/disk_sort_and_hash.json` 生成，含排序溢出/哈希溢出/全表扫描/热点 + work_mem 动作 + 嵌套计划树）。
+
+顶层字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `query` | string | 原始 SQL（已知时） |
+| `is_analyze` | bool | 计划是否带真实执行统计（ANALYZE） |
+| `execution_time_ms` / `planning_time_ms` | number | 执行/规划耗时 |
+| `summary` | `{critical,warning,info}` | 各严重度计数 |
+| `plan_tree` | object | 序列化计划树，每个节点含 `label/node_type/depth/estimated_rows/actual_rows/loops/time_ms/cost/findings(索引)/children` |
+| `findings[]` | array | 诊断，按严重度降序 |
+| `actions` | `{indexes[],analyze[],config[]}` | 可执行建议（空为 `[]`） |
+
+`findings[]` 每项：`severity`(`critical`/`warning`/`info`)、`rule`、`node_label`、`node_path`、`relation`、`problem`、`recommendation`、`evidence`(规则特定数值)。
+
+### 获取 JSON 的三种方式
+
+```bash
+# 1) CLI：离线计划
+slow-sql-analyzer plan -f explain.json --format json
+#    实时
+slow-sql-analyzer analyze --dsn "..." --query "SELECT ..." --format json
+
+# 2) HTTP API
+curl -s localhost:8080/v1/plan -H 'Content-Type: application/json' \
+      -d '{"plan":<EXPLAIN JSON 数组>}' | jq
+
+# 3) 查看仓库内置完整示例（无需运行）
+cat examples/sample-report.json
+#    重新生成（确定性，可复现）：
+slow-sql-analyzer plan -f testdata/disk_sort_and_hash.json --format json
+```
+
 ## 配置
 
 | Flag | 默认 | 说明 |

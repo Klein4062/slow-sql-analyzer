@@ -1,0 +1,160 @@
+{
+  "is_analyze": true,
+  "execution_time_ms": 455.2,
+  "planning_time_ms": 0.3,
+  "summary": {
+    "critical": 3,
+    "warning": 1,
+    "info": 0
+  },
+  "plan_tree": {
+    "label": "GroupAggregate",
+    "node_type": "GroupAggregate",
+    "depth": 0,
+    "estimated_rows": 500000,
+    "actual_rows": 500000,
+    "loops": 1,
+    "time_ms": 455.12,
+    "cost": 10000000004314.23,
+    "children": [
+      {
+        "label": "Sort",
+        "node_type": "Sort",
+        "depth": 1,
+        "estimated_rows": 500000,
+        "actual_rows": 500000,
+        "loops": 1,
+        "time_ms": 320.1,
+        "cost": 10000000002814.23,
+        "findings": [
+          2
+        ],
+        "children": [
+          {
+            "label": "Hash Join",
+            "node_type": "Hash Join",
+            "depth": 2,
+            "estimated_rows": 500000,
+            "actual_rows": 500000,
+            "loops": 1,
+            "time_ms": 120,
+            "cost": 4.1,
+            "children": [
+              {
+                "label": "Seq Scan on public.events",
+                "node_type": "Seq Scan",
+                "depth": 3,
+                "estimated_rows": 500000,
+                "actual_rows": 500000,
+                "loops": 1,
+                "time_ms": 50,
+                "cost": 1,
+                "findings": [
+                  0
+                ]
+              },
+              {
+                "label": "Hash",
+                "node_type": "Hash",
+                "depth": 3,
+                "estimated_rows": 100000,
+                "actual_rows": 100000,
+                "loops": 1,
+                "time_ms": 0.02,
+                "cost": 0.5,
+                "findings": [
+                  3
+                ],
+                "children": [
+                  {
+                    "label": "Seq Scan on public.users",
+                    "node_type": "Seq Scan",
+                    "depth": 4,
+                    "estimated_rows": 100000,
+                    "actual_rows": 100000,
+                    "loops": 1,
+                    "time_ms": 10,
+                    "cost": 0.5,
+                    "findings": [
+                      1
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "severity": "critical",
+      "rule": "SeqScanLargeTable",
+      "node_label": "Seq Scan on public.events",
+      "node_path": "GroupAggregate \u003e Sort \u003e Hash Join \u003e Seq Scan on public.events",
+      "node_type": "Seq Scan",
+      "relation": "public.events",
+      "problem": "sequential scan on public.events is estimated to read ~500.0k rows",
+      "recommendation": "add an index on the columns referenced in the WHERE condition to avoid the full table scan",
+      "evidence": {
+        "estimated_rows": 500000,
+        "filter": "",
+        "index_cond": ""
+      }
+    },
+    {
+      "severity": "critical",
+      "rule": "SeqScanLargeTable",
+      "node_label": "Seq Scan on public.users",
+      "node_path": "GroupAggregate \u003e Sort \u003e Hash Join \u003e Hash \u003e Seq Scan on public.users",
+      "node_type": "Seq Scan",
+      "relation": "public.users",
+      "problem": "sequential scan on public.users is estimated to read ~100.0k rows",
+      "recommendation": "add an index on the columns referenced in the WHERE condition to avoid the full table scan",
+      "evidence": {
+        "estimated_rows": 100000,
+        "filter": "",
+        "index_cond": ""
+      }
+    },
+    {
+      "severity": "critical",
+      "rule": "DiskSort",
+      "node_label": "Sort",
+      "node_path": "GroupAggregate \u003e Sort",
+      "node_type": "Sort",
+      "problem": "sort spilled 92.8 MB to disk using \"external merge\" — in-memory sort would be much faster",
+      "recommendation": "raise work_mem to keep this sort in memory, or add an index on (events.user_id, events.day) so PostgreSQL can read rows pre-sorted and skip the sort",
+      "evidence": {
+        "sort_key": [
+          "events.user_id",
+          "events.day"
+        ],
+        "sort_method": "external merge",
+        "sort_space_kb": 95000
+      }
+    },
+    {
+      "severity": "warning",
+      "rule": "HashSpill",
+      "node_label": "Hash",
+      "node_path": "GroupAggregate \u003e Sort \u003e Hash Join \u003e Hash",
+      "node_type": "Hash",
+      "problem": "hash join probe used 4 batches (original 1) — it spilled to disk",
+      "recommendation": "raise work_mem so the hash table fits in a single batch (one pass) instead of spilling",
+      "evidence": {
+        "hash_batches": 4,
+        "original_hash_batches": 1,
+        "peak_memory_kb": 4096
+      }
+    }
+  ],
+  "actions": {
+    "indexes": [],
+    "analyze": [],
+    "config": [
+      "SET work_mem = '140MB'; -- covers the 95000 KB spill"
+    ]
+  }
+}
