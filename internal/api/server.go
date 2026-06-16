@@ -25,6 +25,9 @@ import (
 //go:embed ui/index.html
 var indexHTML []byte
 
+//go:embed ui/rules.html
+var rulesHTML []byte
+
 // Config configures the server.
 type Config struct {
 	// DefaultDSN is used for /v1/analyze when the request omits a DSN.
@@ -53,6 +56,8 @@ func (s *Server) Handler() http.Handler {
 
 	r.Get("/", s.ui)
 	r.Get("/ui", s.ui)
+	r.Get("/rules", s.rulesPage)
+	r.Get("/v1/rules", s.rulesCatalog)
 	r.Get("/healthz", s.health)
 	r.Post("/v1/plan", s.analyzePlan)
 	r.Post("/v1/analyze", s.analyzeQuery)
@@ -64,6 +69,18 @@ func (s *Server) ui(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write(indexHTML)
+}
+
+// rulesPage serves the rules reference page.
+func (s *Server) rulesPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(rulesHTML)
+}
+
+// rulesCatalog returns the rule reference as JSON (single source: rules.Catalog).
+func (s *Server) rulesCatalog(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, rules.Catalog())
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

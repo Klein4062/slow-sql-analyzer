@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,83 @@ func TestHealthz(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+// TestRulesCatalog verifies the rules reference covers all three categories
+// (common / live / offline) and every implemented rule is documented.
+func TestRulesCatalog(t *testing.T) {
+	srv := New(Config{})
+	req := httptest.NewRequest(http.MethodGet, "/v1/rules", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var infos []struct {
+		Name     string `json:"name"`
+		Category string `json:"category"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &infos); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, rec.Body.String())
+	}
+
+	cats := map[string]int{}
+	names := map[string]bool{}
+	for _, i := range infos {
+		cats[i.Category]++
+		names[i.Name] = true
+	}
+	for _, want := range []string{"common", "live", "offline"} {
+		if cats[want] == 0 {
+			t.Errorf("category %q has no rules; got %+v", want, cats)
+		}
+	}
+	// Every implemented rule must appear in the catalog.
+	for _, want := range []string{
+		"SeqScanLargeTable", "CardinalityMisestimate", "DiskSort", "HashSpill",
+		"NestedLoopExpensiveInner", "InefficientFilter", "LowBufferHitRatio",
+		"Hotspot", "StaleStatistics",
+	} {
+		if !names[want] {
+			t.Errorf("catalog missing rule %q", want)
+		}
+	}
+	// StaleStatistics must be documented under both live and offline (its two
+	// mode-specific behaviors).
+	var staleCats []string
+	for _, i := range infos {
+		if i.Name == "StaleStatistics" {
+			staleCats = append(staleCats, i.Category)
+		}
+	}
+	for _, want := range []string{"live", "offline"} {
+		var found bool
+		for _, c := range staleCats {
+			if c == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("StaleStatistics should appear under %q; got %v", want, staleCats)
+		}
+	}
+}
+
+// TestRulesPageServed verifies the rules reference HTML page is reachable.
+func TestRulesPageServed(t *testing.T) {
+	srv := New(Config{})
+	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("content-type = %q, want text/html", ct)
+	}
+	if !strings.Contains(rec.Body.String(), "分析规则说明") {
+		t.Error("rules page missing title")
 	}
 }
