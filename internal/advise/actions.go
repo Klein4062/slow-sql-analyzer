@@ -35,7 +35,7 @@ func Actions(findings []analyzer.Finding) []Action {
 	for _, s := range IndexSuggestions(findings) {
 		actions = append(actions, Action{
 			Kind:        ActionIndex,
-			Description: fmt.Sprintf("speed up scans on %s", s.Relation),
+			Description: fmt.Sprintf("加速 %s 的扫描", s.Relation),
 			SQL:         s.SQL(),
 		})
 	}
@@ -45,7 +45,7 @@ func Actions(findings []analyzer.Finding) []Action {
 	for _, rel := range analyzeRels {
 		actions = append(actions, Action{
 			Kind:        ActionAnalyze,
-			Description: fmt.Sprintf("refresh planner statistics on %s", rel),
+			Description: fmt.Sprintf("刷新 %s 的规划器统计", rel),
 			SQL:         fmt.Sprintf("ANALYZE %s;", rel),
 		})
 	}
@@ -54,7 +54,7 @@ func Actions(findings []analyzer.Finding) []Action {
 	if mem := workMemSuggestion(findings); mem != "" {
 		actions = append(actions, Action{
 			Kind:        ActionConfig,
-			Description: "avoid disk spills from sorts/hashes by raising work_mem",
+			Description: "调大 work_mem，避免排序/哈希溢出到磁盘",
 			SQL:         mem,
 		})
 	}
@@ -103,7 +103,7 @@ func workMemSuggestion(findings []analyzer.Finding) string {
 		// Hash spill without byte info: give a generic advisory bump.
 		for _, f := range findings {
 			if f.Rule == "HashSpill" {
-				return "SET work_mem = '64MB'; -- tune upward until batches == 1"
+				return "SET work_mem = '64MB'; -- 调大直到 batches == 1"
 			}
 		}
 		return ""
@@ -114,7 +114,7 @@ func workMemSuggestion(findings []analyzer.Finding) string {
 	if mb < 4 {
 		mb = 4
 	}
-	return fmt.Sprintf("SET work_mem = '%dMB'; -- covers the %d KB spill", mb, maxKB)
+	return fmt.Sprintf("SET work_mem = '%dMB'; -- 覆盖 %d KB 的溢出", mb, maxKB)
 }
 
 func toInt(v any) int {
@@ -133,11 +133,11 @@ func toInt(v any) int {
 func (k ActionKind) Describe() string {
 	switch k {
 	case ActionIndex:
-		return "Add indexes"
+		return "建索引"
 	case ActionAnalyze:
-		return "Refresh statistics"
+		return "刷新统计"
 	case ActionConfig:
-		return "Adjust configuration"
+		return "调整配置"
 	}
 	return strings.Title(string(k))
 }

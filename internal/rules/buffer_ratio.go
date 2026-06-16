@@ -45,12 +45,11 @@ func (LowBufferHitRatio) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 			NodePath:  joinPath(path),
 			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
-				"%s read %s blocks but only %s were cache hits (%s hit ratio)",
+				"%s 读取了 %s 个块，但仅 %s 个命中缓存（命中率 %s）",
 				node.Label(),
 				formatRows(total), formatRows(node.SharedHitBlocks), formatPct(ratio),
 			),
-			Recommendation: "increase shared_buffers, or run the query again after warm-up; " +
-				"if this table is hot, ensure it fits in memory",
+			Recommendation: "调大 shared_buffers，或预热后再跑；若该表是热点表，确保它能驻留内存",
 			Evidence: map[string]any{
 				"shared_hit":  node.SharedHitBlocks,
 				"shared_read": node.SharedReadBlocks,

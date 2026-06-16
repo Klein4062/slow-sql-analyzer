@@ -36,9 +36,9 @@ func (CardinalityMisestimate) Analyze(ctx *analyzer.AnalysisContext) []analyzer.
 		estimate := node.PlanRows
 
 		// 判断是高估还是低估：低估更危险（会导致选错 join 方式、哈希表过小）。
-		direction := "under-estimated"
+		direction := "低估"
 		if actual < estimate {
-			direction = "over-estimated"
+			direction = "高估"
 		}
 
 		severity := analyzer.SeverityWarning
@@ -50,13 +50,11 @@ func (CardinalityMisestimate) Analyze(ctx *analyzer.AnalysisContext) []analyzer.
 		var rec string
 		if node.RelationName != "" {
 			rec = fmt.Sprintf(
-				"run ANALYZE on %s to refresh statistics; if multiple columns are correlated, "+
-					"create extended statistics (CREATE STATISTICS) on them",
+				"对 %s 执行 ANALYZE 刷新统计；若多列相关，用 CREATE STATISTICS 创建扩展统计",
 				target,
 			)
 		} else {
-			rec = "run ANALYZE on the tables feeding this node to refresh statistics; " +
-				"for correlated predicate columns, create extended statistics (CREATE STATISTICS)"
+			rec = "对该节点涉及的表执行 ANALYZE 刷新统计；谓词列相关时用 CREATE STATISTICS 创建扩展统计"
 		}
 
 		out = append(out, analyzer.Finding{
@@ -67,7 +65,7 @@ func (CardinalityMisestimate) Analyze(ctx *analyzer.AnalysisContext) []analyzer.
 			NodeType:     node.NodeType,
 			RelationName: node.QualifiedName(),
 			Problem: fmt.Sprintf(
-				"planner %s rows: estimated %s but actual %s (%.0fx off) at %q",
+				"规划器%s：估算 %s 行，实际 %s 行（偏差 %.0f 倍），节点 %q",
 				direction, formatRows(estimate), formatRows(actual), ratio, node.Label(),
 			),
 			Recommendation: rec,

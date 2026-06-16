@@ -48,10 +48,10 @@ func (Hotspot) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 			NodePath:  joinPath(path),
 			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
-				"%s spends ~%.1f ms of its own time — %.0f%% of total execution time",
+				"%s 自身耗时约 %.1f ms——占总执行时间的 %.0f%%",
 				node.Label(), exclusive, frac*100,
 			),
-			Recommendation: "this is the main time sink; prioritize fixing any findings on this node or its subtree",
+			Recommendation: "这是主要耗时点；优先处理该节点或其子树上的其它诊断",
 			Evidence: map[string]any{
 				"exclusive_ms":      exclusive,
 				"fraction_of_total": frac,

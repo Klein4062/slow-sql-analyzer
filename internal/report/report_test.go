@@ -46,7 +46,7 @@ func TestRenderTextSeqScanFixture(t *testing.T) {
 	out := RenderText(m)
 
 	// Sanity-check key sections are present.
-	for _, want := range []string{"Plan Analysis", "Seq Scan on public.orders", "SEQSCANLARGETABLE", "recommendation:"} {
+	for _, want := range []string{"执行计划分析", "Seq Scan on public.orders", "SEQSCANLARGETABLE", "建议："} {
 		if !strings.Contains(out, want) {
 			t.Errorf("text output missing %q", want)
 		}

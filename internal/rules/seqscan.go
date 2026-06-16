@@ -35,14 +35,14 @@ func (SeqScanLargeTable) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 		}
 
 		problem := fmt.Sprintf(
-			"sequential scan on %s is estimated to read ~%s rows",
+			"对 %s 的 Seq Scan 预计读取约 %s 行",
 			node.QualifiedName(), formatRows(node.PlanRows),
 		)
 		if node.Filter != "" {
-			problem += fmt.Sprintf("; filter %q removes most of them", node.Filter)
+			problem += fmt.Sprintf("；过滤条件 %q 会丢弃其中大部分行", node.Filter)
 		}
 
-		rec := "add an index on the columns referenced in the WHERE condition to avoid the full table scan"
+		rec := "在 WHERE 条件涉及的列上建索引，避免全表扫描"
 		out = append(out, analyzer.Finding{
 			Severity:       severity,
 			Rule:           "SeqScanLargeTable",

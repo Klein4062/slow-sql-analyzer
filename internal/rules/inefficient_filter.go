@@ -62,11 +62,11 @@ func (InefficientFilter) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 			NodeType:     node.NodeType,
 			RelationName: node.QualifiedName(),
 			Problem: fmt.Sprintf(
-				"%s scanned %s rows but the filter %q discarded %s of them",
+				"%s 扫描了 %s 行，但过滤条件 %q 丢弃了其中 %s",
 				node.NodeType, formatRows(scanned), node.Filter, formatPct(ratio),
 			),
 			Recommendation: fmt.Sprintf(
-				"add an index on %s covering %q so PostgreSQL reads only matching rows",
+				"在 %s 上为 %q 建索引，使 PostgreSQL 只读取匹配的行",
 				node.QualifiedName(), node.Filter,
 			),
 			Evidence: mergeEvidence(

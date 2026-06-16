@@ -36,13 +36,13 @@ func (HashSpill) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 			severity = analyzer.SeverityCritical
 		}
 
-		kind := "hash join probe"
+		kind := "Hash Join"
 		if isHashAgg {
-			kind = "hash aggregate"
+			kind = "Hash Aggregate"
 		}
-		rec := "raise work_mem so the hash table fits in a single batch (one pass) instead of spilling"
+		rec := "调大 work_mem，使哈希表单批次（一趟）完成，避免溢出"
 		if isHashAgg {
-			rec = "raise work_mem; if the aggregate groups are very numerous, also consider rewriting to a grouped aggregate or increasing maintenance_work_mem"
+			rec = "调大 work_mem；若分组数极多，可考虑改写为分组聚合或调大 maintenance_work_mem"
 		}
 
 		out = append(out, analyzer.Finding{
@@ -52,7 +52,7 @@ func (HashSpill) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 			NodePath:  joinPath(path),
 			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
-				"%s used %d batches (original %d) — it spilled to disk",
+				"%s 使用了 %d 个批次（原始 %d）——已溢出到磁盘",
 				kind, node.HashBatches, node.OriginalHashBatches,
 			),
 			Recommendation: rec,

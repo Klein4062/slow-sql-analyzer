@@ -35,11 +35,10 @@ func (DiskSort) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 			severity = analyzer.SeverityCritical
 		}
 
-		rec := "raise work_mem so the sort fits in memory"
+		rec := "调大 work_mem，让该排序放进内存"
 		if len(node.SortKey) > 0 {
 			rec = fmt.Sprintf(
-				"raise work_mem to keep this sort in memory, or add an index on (%s) "+
-					"so PostgreSQL can read rows pre-sorted and skip the sort",
+				"调大 work_mem 让排序留在内存；或按 (%s) 建索引，使 PostgreSQL 按序读取、跳过排序",
 				joinCols(node.SortKey),
 			)
 		}
@@ -51,8 +50,8 @@ func (DiskSort) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 			NodePath:  joinPath(path),
 			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
-				"sort spilled %s to disk using %q — in-memory sort would be much faster",
-				formatBytes(node.SortSpaceUsed), node.SortMethod,
+				"排序使用 %q 溢出到磁盘 %s——内存排序会快得多",
+				node.SortMethod, formatBytes(node.SortSpaceUsed),
 			),
 			Recommendation: rec,
 			Evidence: map[string]any{

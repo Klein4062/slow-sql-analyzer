@@ -47,13 +47,13 @@ func (NestedLoopExpensiveInner) Analyze(ctx *analyzer.AnalysisContext) []analyze
 		case inner.NodeType == "Seq Scan":
 			severity = analyzer.SeverityCritical
 			detail = fmt.Sprintf(
-				"the inner Seq Scan on %s ran %s times — that is %s sequential scans",
+				"内表 Seq Scan on %s 运行了 %s 次——即 %s 次顺序扫描",
 				inner.QualifiedName(), formatRows(loops), formatRows(loops),
 			)
 		case inner.IsScan() && inner.TotalCost >= 4.0:
 			severity = analyzer.SeverityWarning
 			detail = fmt.Sprintf(
-				"the inner %s (cost %.1f) ran %s times",
+				"内表 %s（cost %.1f）运行了 %s 次",
 				inner.NodeType, inner.TotalCost, formatRows(loops),
 			)
 		default:
@@ -67,12 +67,11 @@ func (NestedLoopExpensiveInner) Analyze(ctx *analyzer.AnalysisContext) []analyze
 			NodePath:  joinPath(path),
 			NodeType:  node.NodeType,
 			Problem: fmt.Sprintf(
-				"Nested Loop re-executes its inner side %s times; %s",
+				"Nested Loop 重复执行其内表 %s 次；%s",
 				formatRows(loops), detail,
 			),
 			Recommendation: fmt.Sprintf(
-				"ensure the inner relation %s has a supporting index on the join key, "+
-					"or let the planner pick a hash/merge join instead",
+				"确保内表 %s 在连接键上有可用索引，或让规划器改用 Hash/Merge Join",
 				inner.QualifiedName(),
 			),
 			Evidence: mergeEvidence(

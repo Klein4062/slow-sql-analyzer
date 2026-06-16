@@ -44,10 +44,10 @@ func RenderText(m Model) string {
 }
 
 func renderHeader(b *strings.Builder, m Model) {
-	titleStyle.Fprintf(b, "PostgreSQL Plan Analysis")
+	titleStyle.Fprintf(b, "PostgreSQL 执行计划分析")
 	b.WriteString("\n")
 	if m.Query != "" {
-		dimStyle.Fprintf(b, "query: %s\n", truncate(singleLine(m.Query), 120))
+		dimStyle.Fprintf(b, "查询：%s\n", truncate(singleLine(m.Query), 120))
 	}
 	b.WriteString(strings.Repeat("─", 60))
 	b.WriteString("\n")
@@ -65,18 +65,18 @@ func renderSummary(b *strings.Builder, m Model) {
 		planTime = fmt.Sprintf("%.2f ms", m.Result.PlanningTime)
 	}
 
-	fmt.Fprintf(b, "execution time: %s   planning time: %s\n", exec, planTime)
+	fmt.Fprintf(b, "执行时间：%s   规划时间：%s\n", exec, planTime)
 	if m.HasAnalyze() {
-		dimStyle.Fprintf(b, "plan includes actual runtime stats (ANALYZE)\n")
+		dimStyle.Fprintf(b, "计划含真实运行时统计（ANALYZE）\n")
 	} else {
-		warningStyle.Fprintf(b, "plan has ESTIMATES ONLY — rules needing runtime stats are disabled\n")
+		warningStyle.Fprintf(b, "计划仅含估算——依赖运行时统计的规则已禁用\n")
 	}
 
 	counts := map[analyzer.Severity]int{}
 	for _, f := range m.Findings {
 		counts[f.Severity]++
 	}
-	fmt.Fprintf(b, "findings: %s critical, %s warning, %s info\n\n",
+	fmt.Fprintf(b, "诊断：%s critical，%s warning，%s info\n\n",
 		criticalStyle.Sprint(counts[analyzer.SeverityCritical]),
 		warningStyle.Sprint(counts[analyzer.SeverityWarning]),
 		infoStyle.Sprint(counts[analyzer.SeverityInfo]),
@@ -93,9 +93,9 @@ func findingsByPath(findings []analyzer.Finding) map[string][]analyzer.Finding {
 }
 
 func renderPlanTree(b *strings.Builder, m Model) {
-	headerStyle.Fprintf(b, "Plan tree\n")
+	headerStyle.Fprintf(b, "计划树\n")
 	if m.Result == nil || m.Result.Root == nil {
-		dimStyle.Fprintf(b, "  (no plan)\n\n")
+		dimStyle.Fprintf(b, "  （无计划）\n\n")
 		return
 	}
 	idx := findingsByPath(m.Findings)
@@ -125,11 +125,11 @@ func topSeverity(fs []analyzer.Finding) analyzer.Severity {
 
 func nodeStats(n *plan.PlanNode) string {
 	var parts []string
-	parts = append(parts, fmt.Sprintf("rows est=%s", fmtRows(n.PlanRows)))
+	parts = append(parts, fmt.Sprintf("估算=%s", fmtRows(n.PlanRows)))
 	if n.HasActual() {
-		parts = append(parts, fmt.Sprintf("act=%s", fmtRows(n.ActualRows)))
+		parts = append(parts, fmt.Sprintf("实际=%s", fmtRows(n.ActualRows)))
 		if n.ActualLoops > 1 {
-			parts = append(parts, fmt.Sprintf("loops=%s", fmtRows(n.ActualLoops)))
+			parts = append(parts, fmt.Sprintf("循环=%s", fmtRows(n.ActualLoops)))
 		}
 		if n.ActualTotalTime > 0 {
 			parts = append(parts, fmt.Sprintf("%.2fms", n.ActualTotalTime))
@@ -142,9 +142,9 @@ func nodeStats(n *plan.PlanNode) string {
 }
 
 func renderFindings(b *strings.Builder, m Model) {
-	headerStyle.Fprintf(b, "Findings (%d)\n", len(m.Findings))
+	headerStyle.Fprintf(b, "诊断（%d）\n", len(m.Findings))
 	if len(m.Findings) == 0 {
-		dimStyle.Fprintf(b, "  none — no anti-patterns detected\n\n")
+		dimStyle.Fprintf(b, "  无——未检测到反模式\n\n")
 		return
 	}
 	for i, f := range m.Findings {
@@ -162,9 +162,9 @@ func renderFindings(b *strings.Builder, m Model) {
 			style.Sprint(strings.ToUpper(f.Rule)),
 			f.NodeLabel,
 		)
-		dimStyle.Fprintf(b, "  path: %s\n", or(f.NodePath, "(root)"))
-		fmt.Fprintf(b, "  problem:        %s\n", f.Problem)
-		fmt.Fprintf(b, "  recommendation: %s\n", f.Recommendation)
+		dimStyle.Fprintf(b, "  路径：%s\n", or(f.NodePath, "（根节点）"))
+		fmt.Fprintf(b, "  问题：%s\n", f.Problem)
+		fmt.Fprintf(b, "  建议：%s\n", f.Recommendation)
 		if i < len(m.Findings)-1 {
 			b.WriteString("\n")
 		}
@@ -176,7 +176,7 @@ func renderActions(b *strings.Builder, m Model) {
 	if len(m.Actions) == 0 {
 		return
 	}
-	headerStyle.Fprintf(b, "Suggested actions\n")
+	headerStyle.Fprintf(b, "建议动作\n")
 	lastKind := advise.ActionKind("")
 	for _, a := range m.Actions {
 		if a.Kind != lastKind {
@@ -186,7 +186,7 @@ func renderActions(b *strings.Builder, m Model) {
 		sqlStyle.Fprintf(b, "  %s\n", a.SQL)
 	}
 	b.WriteString("\n")
-	dimStyle.Fprintf(b, "Index suggestions are heuristic — verify against your schema and workload.\n")
+	dimStyle.Fprintf(b, "索引建议为启发式——请结合你的 schema 与工作负载复核。\n")
 }
 
 // --- small helpers ---

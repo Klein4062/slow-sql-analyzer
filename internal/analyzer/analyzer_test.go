@@ -68,8 +68,8 @@ func TestCardinalityDetectsUnderestimate(t *testing.T) {
 	if nested == nil {
 		t.Fatalf("no finding for Nested Loop node")
 	}
-	if nested.Evidence["direction"] != "under-estimated" {
-		t.Errorf("want under-estimated, got %v", nested.Evidence["direction"])
+	if nested.Evidence["direction"] != "低估" {
+		t.Errorf("want 低估, got %v", nested.Evidence["direction"])
 	}
 }
 

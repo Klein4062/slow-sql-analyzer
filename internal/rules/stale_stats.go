@@ -65,7 +65,7 @@ func liveStaleFindings(stats map[string]plan.TableStat, misByRel map[string]scan
 		}
 
 		severity := analyzer.SeverityWarning
-		if ratio >= 0.5 || (reason == "never analyzed" && ts.LiveTuples > 0) {
+		if ratio >= 0.5 || (reason == "never" && ts.LiveTuples > 0) {
 			severity = analyzer.SeverityCritical
 		}
 
@@ -83,7 +83,7 @@ func liveStaleFindings(stats map[string]plan.TableStat, misByRel map[string]scan
 		// 交叉印证：该表在计划里也出现基数偏差 → 病因+症状吻合，升 critical。
 		if mis, ok := misByRel[ts.Relation]; ok {
 			severity = analyzer.SeverityCritical
-			problem += fmt.Sprintf("; a cardinality mismatch in the plan (%.0fx) confirms it", mis.Ratio)
+			problem += fmt.Sprintf("；计划里的基数偏差（%.0f 倍）印证了这一点", mis.Ratio)
 			ev["confirmed_by_cardinality"] = true
 			ev["cardinality_ratio"] = mis.Ratio
 		}
@@ -91,12 +91,12 @@ func liveStaleFindings(stats map[string]plan.TableStat, misByRel map[string]scan
 		out = append(out, analyzer.Finding{
 			Severity:       severity,
 			Rule:           "StaleStatistics",
-			NodeLabel:      "Statistics for " + ts.QualifiedName(),
+			NodeLabel:      ts.QualifiedName() + " 的统计信息",
 			NodePath:       ts.QualifiedName(),
 			NodeType:       "TableStatistics",
 			RelationName:   ts.QualifiedName(),
 			Problem:        problem,
-			Recommendation: fmt.Sprintf("run ANALYZE %s to refresh planner statistics", ts.QualifiedName()),
+			Recommendation: fmt.Sprintf("执行 ANALYZE %s 刷新规划器统计", ts.QualifiedName()),
 			Evidence:       ev,
 		})
 	}
@@ -121,16 +121,16 @@ func offlineStaleFindings(misByRel map[string]scanMis) []analyzer.Finding {
 		out = append(out, analyzer.Finding{
 			Severity:     analyzer.SeverityWarning,
 			Rule:         "StaleStatistics",
-			NodeLabel:    "Statistics for " + mis.Qualified,
+			NodeLabel:    mis.Qualified + " 的统计信息",
 			NodePath:     mis.Qualified,
 			NodeType:     "TableStatistics",
 			RelationName: mis.Qualified,
 			Problem: fmt.Sprintf(
-				"%s: estimated %s but actual %s rows (~%.0fx off) — statistics may be stale or insufficient",
+				"%s：估算 %s 行，实际 %s 行（偏差约 %.0f 倍）——统计可能已过时或不足",
 				mis.Qualified, formatRows(mis.Estimate), formatRows(mis.Actual), mis.Ratio,
 			),
-			Recommendation: "run ANALYZE to refresh statistics; if the predicate columns are correlated, " +
-				"also CREATE STATISTICS (inferred from the plan — no live catalog data available)",
+			Recommendation: "执行 ANALYZE 刷新统计；若谓词列相关，再用 CREATE STATISTICS" +
+				"（由计划推断——无实时系统表数据）",
 			Evidence: map[string]any{
 				"mode":              "inferred",
 				"estimated_rows":    mis.Estimate,
@@ -177,31 +177,33 @@ type scanMis struct {
 }
 
 // assessStale decides whether a table's stats are stale (live mode). Returns
-// (stale, modification-ratio, human-readable reason).
+// (stale, modification-ratio, reason). The reason "never" is a sentinel for
+// never-analyzed; otherwise it is a human-readable Chinese summary.
+// reason 用 "never" 作为「从未分析」的哨兵值，其余为中文摘要。
 func assessStale(ts plan.TableStat, t config.Thresholds) (bool, float64, string) {
 	never := !ts.Analyzed()
 	if never && ts.LiveTuples > 0 {
-		return true, 1.0, "never analyzed"
+		return true, 1.0, "never"
 	}
 	if ts.LiveTuples <= 0 {
 		return false, 0, ""
 	}
 	ratio := float64(ts.ModSinceAnalyze) / float64(ts.LiveTuples)
 	if ratio >= t.StaleModRatio && ts.ModSinceAnalyze >= int64(t.StaleMinMods) {
-		return true, ratio, fmt.Sprintf("%.0f%% of rows changed since last ANALYZE", ratio*100)
+		return true, ratio, fmt.Sprintf("自上次 ANALYZE 以来 %.0f%% 的行已变更", ratio*100)
 	}
 	return false, ratio, ""
 }
 
 func describeProblem(ts plan.TableStat, ratio float64, reason string) string {
-	if reason == "never analyzed" {
+	if reason == "never" {
 		return fmt.Sprintf(
-			"%s has never been ANALYZEd (live tuples ~%s); the planner is working without fresh statistics",
+			"%s 从未执行过 ANALYZE（活元组约 %s）；规划器在没有新鲜统计的情况下工作",
 			ts.QualifiedName(), formatRows(float64(ts.LiveTuples)),
 		)
 	}
 	return fmt.Sprintf(
-		"%s statistics are stale: %s (~%s of %s live tuples modified); planner estimates are likely off",
+		"%s 统计已过时：%s（约 %s / %s 活元组被修改）；规划器估算很可能不准",
 		ts.QualifiedName(), reason,
 		formatRows(float64(ts.ModSinceAnalyze)), formatRows(float64(ts.LiveTuples)),
 	)
