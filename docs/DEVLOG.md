@@ -111,6 +111,16 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     - 新增「分析规则说明」页 `GET /rules`，按**通用 / 实时独有 / 离线独有**三类展示全部规则。
       以 `rules.Catalog()` 作为单一数据源（页面与 `/v1/rules` 共用，避免与代码漂移）；
       StaleStatistics 因在实时/离线行为不同而归入两个独有类。测试断言三类齐全 + 9 个规则名全覆盖。
+16. **openGauss 计划支持**。openGauss 基于 PG 9.2.4，`EXPLAIN FORMAT JSON` 结构与 PG 完全兼容
+    （同名字段），故**行存计划本就能直接分析**。补的是**列存/向量化引擎**的节点识别：在 `plan.go`
+    新增节点判定 helper（`IsSeqScan`/`IsSort`/`IsHashNode`/`IsHashAggregate`/`IsNestedLoop` 等，
+    覆盖 `CStore Scan`、`Vec Seq Scan`、`Vec Sort`、`Vec Hash`、`VecAgg`、`Vec Nestloop`），4 条规则
+    改用 helper 取代硬编码节点字符串——PG 与 openGauss 两种形态都匹配。两份真实结构 fixture
+    （行存 + 列存）+ 节点 helper 表测试 + 规则触发断言。
+    **本地部署踩坑**：openGauss enmotech 镜像在 Docker Desktop（Mac，cgroup v2）下因 `gs_cgroup`
+    无法在 v2 生成 `gscgroup_omm.cfg` 而启动崩溃（5.0.0/latest 均如此）——这是已知问题，非参数
+    可绕。故 openGauss 走**离线**（gsql 导出 FORMAT JSON 粘贴）或**实时 command 连接器 + gsql**
+    连远程 Linux 实例（原生 cgroup 无此问题）。
 
 ## 踩过的坑（值得记录）
 

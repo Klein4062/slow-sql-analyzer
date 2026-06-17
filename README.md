@@ -3,7 +3,7 @@
 ![CI](https://github.com/Klein4062/slow-sql-analyzer/actions/workflows/ci.yml/badge.svg)
 [![Release](https://img.shields.io/github/v/release/Klein4062/slow-sql-analyzer)](https://github.com/Klein4062/slow-sql-analyzer/releases/latest)
 
-通过 **SQL 与执行计划**分析 PostgreSQL 查询计划是否最优，并给出**可执行的优化建议**（缺失索引、`work_mem` 调优、`ANALYZE` 统计、查询改写提示）。
+通过 **SQL 与执行计划**分析 **PostgreSQL / openGauss** 查询计划是否最优，并给出**可执行的优化建议**（缺失索引、`work_mem` 调优、`ANALYZE` 统计、查询改写提示）。openGauss 的行存计划直接兼容；列存/向量化引擎（`CStore Scan`、`Vec Hash Join`、`VecAgg` 等）也已识别。
 
 提供 **CLI**、**HTTP API** 与**可视化网页**三种使用方式，支持 **离线解析**已有 EXPLAIN 计划与 **实时连库** 执行 EXPLAIN 两种数据来源。已用真实 PostgreSQL 17 闭环验证（无索引查询建议建索引后，14.97ms → 1.23ms，≈12×）。
 
@@ -53,9 +53,9 @@ Suggested actions
 
 ```bash
 curl -L -o slow-sql-analyzer \
-  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.4.0/slow-sql-analyzer-linux-amd64
+  https://github.com/Klein4062/slow-sql-analyzer/releases/download/v0.5.0/slow-sql-analyzer-linux-amd64
 chmod +x slow-sql-analyzer
-./slow-sql-analyzer version   # v0.4.0
+./slow-sql-analyzer version   # v0.5.0
 ```
 
 **方式二：从源码构建**
@@ -202,6 +202,31 @@ cat examples/sample-report.json
 slow-sql-analyzer plan -f testdata/disk_sort_and_hash.json --format json
 ```
 
+## openGauss 支持
+
+openGauss 基于 PostgreSQL，`EXPLAIN FORMAT JSON` 结构与 PG 兼容：
+
+- **行存计划**：直接可分析（与 PG 完全一致）。
+- **列存/向量化引擎**：已识别 `CStore Scan`、`CU Scan`、`Vec Seq Scan`、`Vec Index Scan`、`Vec Sort`、`Vec Hash`、`VecAgg`、`Vec Nestloop` 等节点，9 条规则对列存计划同样生效。
+
+**离线分析**（推荐，无需本地 DB）——用 `gsql` 导出 FORMAT JSON 后粘贴：
+
+```bash
+gsql -d mydb -p 5432 -c "SET explain_perf_mode = normal; EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT ..." -t -A > plan.json
+slow-sql-analyzer plan -f plan.json
+# 注意 openGauss 需先 SET explain_perf_mode = normal 才输出标准 JSON。
+```
+
+**实时分析**：用 `command` 连接器 + `gsql` 连接 openGauss 实例（pgx 直连因 openGauss 默认 sha256 口令加密通常不可用）：
+
+```bash
+slow-sql-analyzer analyze --connector command \
+  --exec 'gsql "{dsn}" -t -A -c "SET explain_perf_mode=normal; EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}"' \
+  --query "SELECT ..."
+```
+
+> 本地 Docker（Mac）部署 openGauss 受 enmotech 镜像的 cgroup v2 不兼容所限；生产建议部署在原生 Linux，或直接用上面的离线/gsql 方式。
+
 ## 配置
 
 | Flag | 默认 | 说明 |
@@ -243,7 +268,7 @@ make ci            # 与 GitHub Actions 一致的完整门禁：gofmt + vet + bu
 
 ## 限制与说明
 
-- 仅支持 PostgreSQL（v1）。规则针对 PG 执行计划字段设计。
+- 支持 **PostgreSQL 与 openGauss**（openGauss 走离线/gsql command 连接器，见上）。规则针对 PG 兼容的执行计划字段设计。
 - 索引建议为**启发式**：通过轻量词法提取列引用，非完整 SQL 解析，需人工复核。
 - 文本格式 EXPLAIN（非 JSON）解析树状结构脆弱，主路径使用 `FORMAT JSON`。
 
