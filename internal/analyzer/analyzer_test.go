@@ -82,3 +82,40 @@ func TestAnalyzeSortsBySeverity(t *testing.T) {
 		}
 	}
 }
+
+// TestOpenGaussRowStorePlan verifies the analyzer handles openGauss row-store
+// EXPLAIN FORMAT JSON (PG-compatible structure) out of the box.
+func TestOpenGaussRowStorePlan(t *testing.T) {
+	a := analyzer.New(rules.Default())
+	report := a.Run(fixture(t, "opengauss_rowstore.json"), config.Default())
+	m := findingsByRule(report)
+	for _, want := range []string{"SeqScanLargeTable", "InefficientFilter", "HashSpill"} {
+		if len(m[want]) == 0 {
+			t.Errorf("openGauss row-store plan: expected %s to fire, got rules %v", want, ruleNames(report))
+		}
+	}
+}
+
+// TestOpenGaussColumnarPlan verifies the analyzer recognizes openGauss columnar
+// / vectorized nodes (CStore Scan, Vec Hash Join, VecAgg).
+func TestOpenGaussColumnarPlan(t *testing.T) {
+	a := analyzer.New(rules.Default())
+	report := a.Run(fixture(t, "opengauss_columnar.json"), config.Default())
+	m := findingsByRule(report)
+	// InefficientFilter firing means the CStore Scan was recognized as a scan
+	// with a filter — the core openGauss columnar recognition.
+	if len(m["InefficientFilter"]) == 0 {
+		t.Errorf("expected InefficientFilter on CStore Scan; got rules %v", ruleNames(report))
+	}
+	if len(m["SeqScanLargeTable"]) == 0 {
+		t.Errorf("expected SeqScanLargeTable on CStore Scan; got rules %v", ruleNames(report))
+	}
+}
+
+func ruleNames(r analyzer.Report) []string {
+	out := make([]string, len(r.Findings))
+	for i, f := range r.Findings {
+		out[i] = f.Rule
+	}
+	return out
+}

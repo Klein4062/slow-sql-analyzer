@@ -22,7 +22,7 @@ func (DiskSort) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 	var out []analyzer.Finding
 
 	plan.WalkPath(ctx.Result.Root, func(node, parent *plan.PlanNode, depth int, path []string) bool {
-		if node.NodeType != "Sort" {
+		if !node.IsSort() {
 			return true
 		}
 		// Spilled to disk? PostgreSQL sets Sort Space Type to "Disk".

@@ -1,0 +1,94 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Aggregate",
+      "Strategy": "Hashed",
+      "Parallel Aware": false,
+      "Startup Cost": 10000018802314.23,
+      "Total Cost": 10000018804314.23,
+      "Plan Rows": 5000,
+      "Plan Width": 64,
+      "Actual Startup Time": 180.521,
+      "Actual Total Time": 395.120,
+      "Actual Rows": 4200,
+      "Actual Loops": 1,
+      "Group Key": ["o.status"],
+      "Plans": [
+        {
+          "Node Type": "Hash Join",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Join Type": "Inner",
+          "Startup Cost": 10000000003789.10,
+          "Total Cost": 10000000017814.23,
+          "Plan Rows": 500000,
+          "Plan Width": 48,
+          "Actual Startup Time": 12.040,
+          "Actual Total Time": 240.000,
+          "Actual Rows": 500000,
+          "Actual Loops": 1,
+          "Hash Cond": "(o.customer_id = c.id)",
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Relation Name": "orders",
+              "Schema": "public",
+              "Alias": "o",
+              "Startup Cost": 0.00,
+              "Total Cost": 12400.00,
+              "Plan Rows": 500000,
+              "Plan Width": 24,
+              "Actual Startup Time": 0.020,
+              "Actual Total Time": 120.000,
+              "Actual Rows": 500000,
+              "Actual Loops": 1,
+              "Filter": "(o.amount > 1000)",
+              "Rows Removed by Filter": 4950000,
+              "Shared Hit Blocks": 100,
+              "Shared Read Blocks": 44200
+            },
+            {
+              "Node Type": "Hash",
+              "Parent Relationship": "Inner",
+              "Parallel Aware": false,
+              "Startup Cost": 1500.00,
+              "Total Cost": 1500.00,
+              "Plan Rows": 100000,
+              "Plan Width": 8,
+              "Actual Startup Time": 10.000,
+              "Actual Total Time": 10.000,
+              "Actual Rows": 100000,
+              "Actual Loops": 1,
+              "Hash Buckets": 65536,
+              "Hash Batches": 4,
+              "Peak Memory Usage": 4096,
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Relation Name": "customers",
+                  "Schema": "public",
+                  "Alias": "c",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 1500.00,
+                  "Plan Rows": 100000,
+                  "Plan Width": 8,
+                  "Actual Startup Time": 0.010,
+                  "Actual Total Time": 6.000,
+                  "Actual Rows": 100000,
+                  "Actual Loops": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 0.820,
+    "Execution Time": 395.300,
+    "Triggers": []
+  }
+]

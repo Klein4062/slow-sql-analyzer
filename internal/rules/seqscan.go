@@ -22,7 +22,7 @@ func (SeqScanLargeTable) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 	t := ctx.Thresholds
 
 	plan.WalkPath(ctx.Result.Root, func(node, parent *plan.PlanNode, depth int, path []string) bool {
-		if node.NodeType != "Seq Scan" {
+		if !node.IsSeqScan() {
 			return true
 		}
 		if node.PlanRows < t.SeqScanRowThreshold {
@@ -35,8 +35,8 @@ func (SeqScanLargeTable) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Findi
 		}
 
 		problem := fmt.Sprintf(
-			"对 %s 的 Seq Scan 预计读取约 %s 行",
-			node.QualifiedName(), formatRows(node.PlanRows),
+			"对 %s 的 %s 预计读取约 %s 行",
+			node.QualifiedName(), node.NodeType, formatRows(node.PlanRows),
 		)
 		if node.Filter != "" {
 			problem += fmt.Sprintf("；过滤条件 %q 会丢弃其中大部分行", node.Filter)

@@ -28,7 +28,7 @@ func (NestedLoopExpensiveInner) Analyze(ctx *analyzer.AnalysisContext) []analyze
 	t := ctx.Thresholds
 
 	plan.WalkPath(ctx.Result.Root, func(node, parent *plan.PlanNode, depth int, path []string) bool {
-		if node.NodeType != "Nested Loop" {
+		if !node.IsNestedLoop() {
 			return true
 		}
 		inner := childByRelationship(node, "Inner")
@@ -44,11 +44,11 @@ func (NestedLoopExpensiveInner) Analyze(ctx *analyzer.AnalysisContext) []analyze
 		severity := analyzer.SeverityInfo
 		detail := ""
 		switch {
-		case inner.NodeType == "Seq Scan":
+		case inner.IsSeqScan():
 			severity = analyzer.SeverityCritical
 			detail = fmt.Sprintf(
-				"内表 Seq Scan on %s 运行了 %s 次——即 %s 次顺序扫描",
-				inner.QualifiedName(), formatRows(loops), formatRows(loops),
+				"内表 %s on %s 运行了 %s 次——即 %s 次顺序扫描",
+				inner.NodeType, inner.QualifiedName(), formatRows(loops), formatRows(loops),
 			)
 		case inner.IsScan() && inner.TotalCost >= 4.0:
 			severity = analyzer.SeverityWarning

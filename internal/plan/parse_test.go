@@ -69,3 +69,54 @@ func TestWalkVisitsAllNodes(t *testing.T) {
 		t.Errorf("visited %d nodes, want 6", count)
 	}
 }
+
+// TestNodeKindHelpers covers the openGauss-aware node classification used by
+// the rules (PG forms + Vec/CStore forms).
+func TestNodeKindHelpers(t *testing.T) {
+	cases := []struct {
+		nodeType                 string
+		strategy                 string
+		scan, seqScan, usesIndex bool
+		sort, hashNode, hashAgg  bool
+		nestedLoop               bool
+	}{
+		{"Seq Scan", "", true, true, false, false, false, false, false},
+		{"Index Scan", "", true, false, true, false, false, false, false},
+		{"CStore Scan", "", true, true, false, false, false, false, false}, // openGauss 列存
+		{"Vec Seq Scan", "", true, true, false, false, false, false, false},
+		{"Vec Index Scan", "", true, false, true, false, false, false, false},
+		{"Sort", "", false, false, false, true, false, false, false},
+		{"Vec Sort", "", false, false, false, true, false, false, false},
+		{"Hash", "", false, false, false, false, true, false, false},
+		{"Vec Hash", "", false, false, false, false, true, false, false},
+		{"Aggregate", "Hashed", false, false, false, false, false, true, false},
+		{"VecAgg", "", false, false, false, false, false, true, false},
+		{"Nested Loop", "", false, false, false, false, false, false, true},
+		{"Vec Nestloop", "", false, false, false, false, false, false, true},
+		{"Hash Join", "", false, false, false, false, false, false, false}, // not a hash BUILD node
+	}
+	for _, c := range cases {
+		n := &PlanNode{NodeType: c.nodeType, Strategy: c.strategy}
+		if got := n.IsScan(); got != c.scan {
+			t.Errorf("%s: IsScan=%v want %v", c.nodeType, got, c.scan)
+		}
+		if got := n.IsSeqScan(); got != c.seqScan {
+			t.Errorf("%s: IsSeqScan=%v want %v", c.nodeType, got, c.seqScan)
+		}
+		if got := n.UsesIndex(); got != c.usesIndex {
+			t.Errorf("%s: UsesIndex=%v want %v", c.nodeType, got, c.usesIndex)
+		}
+		if got := n.IsSort(); got != c.sort {
+			t.Errorf("%s: IsSort=%v want %v", c.nodeType, got, c.sort)
+		}
+		if got := n.IsHashNode(); got != c.hashNode {
+			t.Errorf("%s: IsHashNode=%v want %v", c.nodeType, got, c.hashNode)
+		}
+		if got := n.IsHashAggregate(); got != c.hashAgg {
+			t.Errorf("%s: IsHashAggregate=%v want %v", c.nodeType, got, c.hashAgg)
+		}
+		if got := n.IsNestedLoop(); got != c.nestedLoop {
+			t.Errorf("%s: IsNestedLoop=%v want %v", c.nodeType, got, c.nestedLoop)
+		}
+	}
+}

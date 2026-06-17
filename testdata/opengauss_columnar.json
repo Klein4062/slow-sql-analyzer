@@ -1,0 +1,93 @@
+[
+  {
+    "Plan": {
+      "Node Type": "VecAgg",
+      "Parallel Aware": false,
+      "Startup Cost": 10000018802314.23,
+      "Total Cost": 10000018804314.23,
+      "Plan Rows": 100,
+      "Plan Width": 64,
+      "Actual Startup Time": 220.521,
+      "Actual Total Time": 480.120,
+      "Actual Rows": 100,
+      "Actual Loops": 1,
+      "Group Key": ["region"],
+      "Plans": [
+        {
+          "Node Type": "Vec Hash Join",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Join Type": "Inner",
+          "Startup Cost": 10000000003789.10,
+          "Total Cost": 10000000017814.23,
+          "Plan Rows": 80000,
+          "Plan Width": 48,
+          "Actual Startup Time": 40.040,
+          "Actual Total Time": 300.000,
+          "Actual Rows": 80000,
+          "Actual Loops": 1,
+          "Hash Cond": "(s.product_id = p.id)",
+          "Plans": [
+            {
+              "Node Type": "CStore Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Relation Name": "store_sales",
+              "Schema": "public",
+              "Alias": "s",
+              "Startup Cost": 0.00,
+              "Total Cost": 250000.00,
+              "Plan Rows": 50000,
+              "Plan Width": 24,
+              "Actual Startup Time": 5.000,
+              "Actual Total Time": 180.000,
+              "Actual Rows": 80000,
+              "Actual Loops": 1,
+              "Filter": "(s.qty > 5)",
+              "Rows Removed by Filter": 7920000,
+              "Shared Hit Blocks": 200,
+              "Shared Read Blocks": 60000
+            },
+            {
+              "Node Type": "Vec Hash",
+              "Parent Relationship": "Inner",
+              "Parallel Aware": false,
+              "Startup Cost": 5000.00,
+              "Total Cost": 5000.00,
+              "Plan Rows": 50000,
+              "Plan Width": 8,
+              "Actual Startup Time": 20.000,
+              "Actual Total Time": 20.000,
+              "Actual Rows": 50000,
+              "Actual Loops": 1,
+              "Hash Buckets": 65536,
+              "Hash Batches": 1,
+              "Peak Memory Usage": 8192,
+              "Plans": [
+                {
+                  "Node Type": "CStore Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Relation Name": "product",
+                  "Schema": "public",
+                  "Alias": "p",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 5000.00,
+                  "Plan Rows": 50000,
+                  "Plan Width": 8,
+                  "Actual Startup Time": 1.000,
+                  "Actual Total Time": 8.000,
+                  "Actual Rows": 50000,
+                  "Actual Loops": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 1.120,
+    "Execution Time": 480.300,
+    "Triggers": []
+  }
+]

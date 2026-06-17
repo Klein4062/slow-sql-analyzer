@@ -22,8 +22,8 @@ func (HashSpill) Analyze(ctx *analyzer.AnalysisContext) []analyzer.Finding {
 	var out []analyzer.Finding
 
 	plan.WalkPath(ctx.Result.Root, func(node, parent *plan.PlanNode, depth int, path []string) bool {
-		isHashNode := node.NodeType == "Hash"
-		isHashAgg := node.NodeType == "Aggregate" && node.Strategy == "Hashed"
+		isHashNode := node.IsHashNode()
+		isHashAgg := node.IsHashAggregate()
 		if !isHashNode && !isHashAgg {
 			return true
 		}

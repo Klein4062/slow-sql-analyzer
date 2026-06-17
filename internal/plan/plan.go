@@ -187,21 +187,66 @@ func (n *PlanNode) ActualRowsTotal() float64 {
 	return n.ActualRows * loops
 }
 
-// IsScan reports whether this node is a relation scan (heap or index access).
+// IsScan reports whether this node is a relation scan (heap, index, or
+// openGauss columnar/vectorized access).
 func (n *PlanNode) IsScan() bool {
 	switch n.NodeType {
 	case "Seq Scan", "Sample Scan", "Index Scan", "Index Only Scan",
 		"Bitmap Heap Scan", "Bitmap Index Scan", "Tid Scan", "CTE Scan",
-		"Subquery Scan", "Function Scan", "Foreign Scan", "Custom Scan":
+		"Subquery Scan", "Function Scan", "Foreign Scan", "Custom Scan",
+		// openGauss 列存 / 向量化扫描节点
+		"CStore Scan", "CU Scan", "Vec Seq Scan", "Vec Index Scan", "Vec Index Only Scan":
 		return true
 	}
 	return false
 }
 
-// UsesIndex reports whether this node reads via an index.
+// IsSeqScan reports a non-index relation scan (full scan): Seq Scan, CStore
+// Scan, Vec Seq Scan, ... — i.e. scans that read the whole relation and benefit
+// from an index. Covers PostgreSQL and openGauss (columnar/vectorized) forms.
+// 报告「全表/全列扫描」（非索引）：覆盖 PG 与 openGauss 的行存/列存/向量化形态。
+func (n *PlanNode) IsSeqScan() bool {
+	return n.IsScan() && !n.UsesIndex()
+}
+
+// UsesIndex reports whether this node reads via an index (PG or openGauss Vec).
 func (n *PlanNode) UsesIndex() bool {
 	switch n.NodeType {
-	case "Index Scan", "Index Only Scan", "Bitmap Index Scan":
+	case "Index Scan", "Index Only Scan", "Bitmap Index Scan",
+		"Vec Index Scan", "Vec Index Only Scan":
+		return true
+	}
+	return false
+}
+
+// IsSort reports a Sort node, including openGauss's vectorized "Vec Sort".
+func (n *PlanNode) IsSort() bool {
+	switch n.NodeType {
+	case "Sort", "Vec Sort":
+		return true
+	}
+	return false
+}
+
+// IsHashNode reports a hash-table build node (Hash, or openGauss "Vec Hash").
+func (n *PlanNode) IsHashNode() bool {
+	switch n.NodeType {
+	case "Hash", "Vec Hash":
+		return true
+	}
+	return false
+}
+
+// IsHashAggregate reports a hashed aggregate: PG "Aggregate" with Strategy
+// "Hashed", or openGauss's vectorized "VecAgg" node.
+func (n *PlanNode) IsHashAggregate() bool {
+	return (n.NodeType == "Aggregate" && n.Strategy == "Hashed") || n.NodeType == "VecAgg"
+}
+
+// IsNestedLoop reports a Nested Loop join, including openGauss "Vec Nestloop".
+func (n *PlanNode) IsNestedLoop() bool {
+	switch n.NodeType {
+	case "Nested Loop", "Vec Nestloop":
 		return true
 	}
 	return false
