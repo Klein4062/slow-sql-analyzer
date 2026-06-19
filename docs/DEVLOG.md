@@ -133,6 +133,14 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     **重要现实**：当前全局覆盖率远未到 90%（advise/report 80%+，plan/analyzer/rules/api/source ~40%，
     cli/config 0%）——故约束按「改动的包」算、增量达成，**未做 90% 硬门禁**（会立刻让 CI 变红）；
     CI 仍只带 `-cover` 信息性输出。日后想把覆盖率抬到 90% 再开硬门禁，是一项独立的大工作量。
+19. **系统性抬升测试覆盖率（46.2% → 75.6%）**。按「低成本高收益」顺序补测试：
+    - config 0→100%、analyzer 41→96%、advise 84→97%（达 90% 目标）；
+    - rules 43→81%（补 5 条规则正向测试 + helpers + catalog）、plan 45→84%、report 84%；
+    - api 45→79%（错误路径：bad json/missing query/no dsn/command 无 exec/未知 connector）；
+    - source 19→54%（FileSource 路径/缺失/坏 JSON/stdin、guardWrite、timeoutOr、bareRelationNames、firstWord）、
+      cli 0→37%（buildConfig flag 映射、version、buildLiveSource 各分支、runAnalysis 文本+json）。
+    cmd/main 与 source.PostgresSource.Fetch（需真实 DB）、cli serve（阻塞监听）未单测——属集成测试范畴。
+    总数 46.2%→75.6%。仍未到全局 90%：剩 source/cli/cmd 这类需 live-DB/集成才能覆盖，是后续抬升点。
 
 ## 踩过的坑（值得记录）
 

@@ -119,3 +119,62 @@ func ruleNames(r analyzer.Report) []string {
 	}
 	return out
 }
+
+func TestSeverityStringGlyphJSON(t *testing.T) {
+	cases := []struct {
+		sev        analyzer.Severity
+		str, glyph string
+	}{
+		{analyzer.SeverityCritical, "critical", "🔴"},
+		{analyzer.SeverityWarning, "warning", "⚠"},
+		{analyzer.SeverityInfo, "info", "ℹ"},
+	}
+	for _, c := range cases {
+		if c.sev.String() != c.str {
+			t.Errorf("String = %q, want %q", c.sev.String(), c.str)
+		}
+		if c.sev.Glyph() != c.glyph {
+			t.Errorf("Glyph = %q, want %q", c.sev.Glyph(), c.glyph)
+		}
+		b, _ := c.sev.MarshalJSON()
+		if string(b) != `"`+c.str+`"` {
+			t.Errorf("MarshalJSON = %s, want %q", b, c.str)
+		}
+	}
+	if (analyzer.Severity(99)).String() != "unknown" {
+		t.Error("unknown severity -> 'unknown'")
+	}
+}
+
+func TestContextAndCountBySeverity(t *testing.T) {
+	res := &plan.PlanResult{Root: &plan.PlanNode{NodeType: "Result"}}
+	ctx := analyzer.NewContext(res, config.DefaultThresholds())
+	if !ctx.HasAnalyze() && res.IsAnalyze {
+		t.Error("HasAnalyze should mirror Result.IsAnalyze (false here)")
+	}
+	res.IsAnalyze = true
+	if !analyzer.NewContext(res, config.DefaultThresholds()).HasAnalyze() {
+		t.Error("HasAnalyze should be true when Result.IsAnalyze")
+	}
+
+	rep := analyzer.Report{Findings: []analyzer.Finding{
+		{Severity: analyzer.SeverityCritical}, {Severity: analyzer.SeverityCritical},
+		{Severity: analyzer.SeverityWarning},
+	}}
+	c := rep.CountBySeverity()
+	if c[analyzer.SeverityCritical] != 2 || c[analyzer.SeverityWarning] != 1 {
+		t.Errorf("counts = %v", c)
+	}
+}
+
+func TestDisabledRuleSkipped(t *testing.T) {
+	cfg := config.Default()
+	cfg.Options.DisabledRules["SeqScanLargeTable"] = true
+	a := analyzer.New(rules.Default())
+	rep := a.Run(fixture(t, "seqscan_large.json"), cfg)
+	for _, f := range rep.Findings {
+		if f.Rule == "SeqScanLargeTable" {
+			t.Fatal("disabled SeqScanLargeTable should not produce findings")
+		}
+	}
+}

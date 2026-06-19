@@ -54,6 +54,41 @@ func TestPlanEndpointBadInput(t *testing.T) {
 	}
 }
 
+func TestAnalyzeQueryErrorPaths(t *testing.T) {
+	srv := New(Config{})
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"bad json", `{not json`, http.StatusBadRequest},
+		{"missing query", `{}`, http.StatusBadRequest},
+		{"no dsn configured", `{"query":"SELECT 1"}`, http.StatusBadRequest}, // no DefaultDSN, connector pgx
+		{"command without exec", `{"query":"SELECT 1","connector":"command"}`, http.StatusBadRequest},
+		{"unknown connector", `{"query":"SELECT 1","connector":"weird"}`, http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader([]byte(c.body)))
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, req)
+			if rec.Code != c.want {
+				t.Fatalf("status = %d, want %d, body=%s", rec.Code, c.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestPlanEndpointBadJSON(t *testing.T) {
+	srv := New(Config{})
+	req := httptest.NewRequest(http.MethodPost, "/v1/plan", bytes.NewReader([]byte(`not json`)))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	srv := New(Config{})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
