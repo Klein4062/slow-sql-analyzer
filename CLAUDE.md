@@ -2,103 +2,95 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this is
+## 这是什么
 
-`slow-sql-analyzer` analyzes PostgreSQL / openGauss query plans for optimality and
-suggests fixes (CREATE INDEX, work_mem, ANALYZE). Three surfaces: CLI (cobra),
-HTTP API + web UI (chi, single embedded HTML), JSON. Two data sources: offline
-(paste EXPLAIN FORMAT JSON) and live (connect & run EXPLAIN). Module path:
-`github.com/Klein4062/slow-sql-analyzer` (Go 1.26).
+`slow-sql-analyzer` 分析 PostgreSQL / openGauss 的查询计划是否最优，并给出修复建议
+（CREATE INDEX、work_mem、ANALYZE）。三种使用界面：CLI（cobra）、HTTP API + 网页
+（chi，单个内嵌 HTML）、JSON。两种数据来源：离线（粘贴 EXPLAIN FORMAT JSON）与实时
+（连库执行 EXPLAIN）。模块路径：`github.com/Klein4062/slow-sql-analyzer`（Go 1.26）。
 
-## Commands
+## 常用命令
 
 ```bash
-make ci                 # FULL gate, identical to GitHub Actions: gofmt + vet + build + test. Run before committing.
-make build              # current-platform binary -> dist/
-make build-all          # cross-compile static linux/darwin/windows × amd64/arm64 -> dist/
-go test -count=1 ./...  # tests (count=1 bypasses cache)
-go test -run TestName ./internal/rules/      # single test
-go run ./cmd/slow-sql-analyzer plan -f testdata/seqscan_large.json          # offline analysis
-go run ./cmd/slow-sql-analyzer analyze --dsn "..." --query "SELECT ..."     # live analysis
-go run ./cmd/slow-sql-analyzer serve --addr :8080 --dsn "..."               # HTTP + web UI at /
+make ci                 # 完整门禁，与 GitHub Actions 完全一致：gofmt + vet + build + test。提交前必跑。
+make build              # 当前平台二进制 -> dist/
+make build-all          # 静态交叉编译 linux/darwin/windows × amd64/arm64 -> dist/
+go test -count=1 ./...  # 跑测试（count=1 禁缓存）
+go test -run TestName ./internal/rules/      # 跑单个测试
+go run ./cmd/slow-sql-analyzer plan -f testdata/seqscan_large.json          # 离线分析
+go run ./cmd/slow-sql-analyzer analyze --dsn "..." --query "SELECT ..."     # 实时分析
+go run ./cmd/slow-sql-analyzer serve --addr :8080 --dsn "..."               # HTTP + 网页，根路径 /
 ```
 
-Version is injected at build via `-ldflags -X .../cli.Version=$(git describe)`;
-`make build` does this. A plain `go build` shows the source default `0.1.0`.
+版本号在构建时通过 `-ldflags -X .../cli.Version=$(git describe)` 注入，`make build` 已带。
+普通 `go build` 会显示源码默认值 `0.1.0`。
 
-CI (`.github/workflows/ci.yml`) runs the `make ci` gates + a cross-compile smoke
-on every push/PR — **it is a hard gate; do not weaken or delete existing tests.**
-Test discipline and the add-a-rule checklist are in `CONTRIBUTING.md`.
+CI（`.github/workflows/ci.yml`）在每次 push/PR 跑 `make ci` 门禁 + 交叉编译 smoke——
+**这是硬门禁，不得弱化或删除既有测试。** 测试纪律与新增规则的清单见 `CONTRIBUTING.md`。
 
-## Architecture (the big picture)
+## 架构（大局）
 
-Strict layering — **the analysis layer is pure, does no I/O, and is fully unit-testable
-with fixture plans**. Data flows one direction:
+严格分层——**分析层是纯函数、不做任何 IO、可用 fixture 计划完整单测**。数据单向流动：
 
 ```
-source (get a plan) → plan (parse + tree) → analyzer (pure rules) → report (render)
+source（取计划） → plan（解析 + 树） → analyzer（纯规则） → report（渲染）
 ```
 
-- **`internal/source`** — implements `PlanSource.Fetch() (*plan.PlanResult, error)`:
-  `FileSource` (offline, stdin/file), `PostgresSource` (built-in **pgx** driver, live),
-  `CommandSource` (shell out to psql/gsql for intranet). All three are transparent to
-  the analyzer. **Only source does I/O** — live stats freshness is fetched here and
-  attached to `PlanResult.TableStats`, then consumed by a pure rule.
-- **`internal/plan`** — `PlanNode` maps PostgreSQL EXPLAIN FORMAT JSON (json tags have
-  spaces). Custom `UnmarshalJSON` records which keys were *present* in a `present` map
-  so callers can distinguish **absent vs zero** (e.g. `Actual Rows` missing ⇒ not run
-  with ANALYZE; see `HasActual`/`IsAnalyze`). Node-classification helpers
-  (`IsSeqScan`/`IsSort`/`IsHashNode`/`IsHashAggregate`/`IsNestedLoop`) cover both
-  PostgreSQL and **openGauss vectorized/columnar** nodes (`CStore Scan`, `Vec Seq Scan`,
-  `Vec Hash`, `VecAgg`, `Vec Nestloop`…).
-- **`internal/analyzer`** — the `Rule` interface (`Name()`, `Analyze(*AnalysisContext)`)
-  and `Analyzer.Run` (runs enabled rules, sorts findings by severity). `AnalysisContext`
-  holds the plan + thresholds + `IsAnalyze`.
-- **`internal/rules`** — one file per rule, all 9 registered in `default.go`. Rules are
-  **pure functions** of `*AnalysisContext`; rules needing runtime stats
-  (Cardinality/NestedLoop/InefficientFilter/Hotspot) self-skip when `!IsAnalyze`.
-- **`internal/advise`** — turns findings into copy-pasteable SQL actions: CREATE INDEX
-  (heuristic column extraction from Filter/Index Cond, not a SQL parser), work_mem
-  (sized from worst spill), ANALYZE.
-- **`internal/report`** — `text` (colored) and `json` renderers sharing one `Model`;
-  JSON includes a serialized `plan_tree` with finding indices for the UI.
-- **`internal/api`** (chi) + **`internal/cli`** (cobra) — thin surfaces. Web UI is a
-  single `internal/api/ui/index.html` served via `go:embed` at `GET /`; rules reference
-  page at `GET /rules` fed by `rules.Catalog()` (single source of truth).
+- **`internal/source`** —— 实现 `PlanSource.Fetch() (*plan.PlanResult, error)`：
+  `FileSource`（离线，stdin/文件）、`PostgresSource`（内置 **pgx** 驱动，实时）、
+  `CommandSource`（shell 调 psql/gsql，用于内网）。三者对分析层透明。**只有 source 做 IO**
+  ——实时统计新鲜度在这里查，附到 `PlanResult.TableStats`，再由纯规则消费。
+- **`internal/plan`** —— `PlanNode` 映射 PostgreSQL EXPLAIN FORMAT JSON（json tag 带空格）。
+  自定义 `UnmarshalJSON` 把原始存在的 key 记进 `present` map，从而区分**字段缺失 vs 零值**
+  （如 `Actual Rows` 缺失 ⇒ 没用 ANALYZE 跑；见 `HasActual`/`IsAnalyze`）。节点判定 helper
+  （`IsSeqScan`/`IsSort`/`IsHashNode`/`IsHashAggregate`/`IsNestedLoop`）同时覆盖 PostgreSQL
+  与 **openGauss 向量化/列存**节点（`CStore Scan`、`Vec Seq Scan`、`Vec Hash`、`VecAgg`、
+  `Vec Nestloop`…）。
+- **`internal/analyzer`** —— `Rule` 接口（`Name()`、`Analyze(*AnalysisContext)`）与
+  `Analyzer.Run`（跑启用的规则、按严重度排序 findings）。`AnalysisContext` 携带计划 + 阈值
+  + `IsAnalyze`。
+- **`internal/rules`** —— 每条规则一个文件，9 条全部在 `default.go` 注册。规则是
+  `*AnalysisContext` 的**纯函数**；依赖运行时统计的规则（Cardinality/NestedLoop/
+  InefficientFilter/Hotspot）在 `!IsAnalyze` 时自行跳过。
+- **`internal/advise`** —— 把 findings 转成可复制执行的 SQL 动作：CREATE INDEX（从
+  Filter/Index Cond 启发式提取列，非完整 SQL 解析）、work_mem（按最大溢出量估算）、ANALYZE。
+- **`internal/report`** —— `text`（彩色）与 `json` 渲染器共用一个 `Model`；JSON 含序列化的
+  `plan_tree`（带 finding 索引，供网页用）。
+- **`internal/api`**（chi）+ **`internal/cli`**（cobra）—— 薄界面层。网页是单个
+  `internal/api/ui/index.html`，经 `go:embed` 在 `GET /` 提供；规则说明页 `GET /rules`
+  由 `rules.Catalog()`（单一数据源）驱动。
 
-### Adding a rule (the common change)
-1. Implement `Rule` in `internal/rules/<name>.go` — use the `plan.PlanNode` helpers, not
-   hardcoded node-type strings (so openGauss Vec/CStore forms match).
-2. Register it in `internal/rules/default.go`.
-3. Add a triggering fixture under `testdata/` and an assertion in `internal/rules/rules_test.go`.
-4. If user-facing, add a row to `rules.Catalog()` (`internal/rules/catalog.go`).
-5. `make ci` green.
+### 新增一条规则（最常见的改动）
+1. 在 `internal/rules/<name>.go` 实现 `Rule` —— 用 `plan.PlanNode` 的 helper，别硬编码
+   节点字符串（这样 openGauss 的 Vec/CStore 形态也能匹配）。
+2. 在 `internal/rules/default.go` 注册。
+3. 在 `testdata/` 加一个能触发的 fixture，并在 `internal/rules/rules_test.go` 加断言。
+4. 若面向用户，在 `rules.Catalog()`（`internal/rules/catalog.go`）加一行。
+5. `make ci` 全绿。
 
-## Conventions & gotchas
+## 约定与坑
 
-- **Rules stay pure.** Anything needing the DB (e.g. stats freshness) is fetched by a
-  `source`, attached to `PlanResult`, then read by the rule.
-- **`testdata/*.json` are shared by tests and the CLI demo** — keep them realistic.
-  `examples/sample-report.json` is regenerated from `testdata/disk_sort_and_hash.json`;
-  `TestExampleReportIsUpToDate` fails (with the regen command) if it drifts.
-- **analyzer tests use the external package `analyzer_test`** to avoid an import cycle
-  with `internal/rules` (rules imports analyzer).
-- Go gotchas hit here: a composite literal in an `if`-init needs parens
-  (`if x := (Rule{}).Analyze(ctx); …`); `FindAllStringSubmatchIndex` returns `-1` for
-  non-matching optional groups — guard before slicing.
-- **Network**: this environment needs `GOPROXY=https://goproxy.cn,direct` (default proxy
-  times out). For air-gapped builds: `make vendor` then `go build -mod=vendor`.
-- **Live openGauss**: use the `command` connector + `gsql` (pgx can't auth openGauss's
-  default sha256), and `SET explain_perf_mode=normal` before FORMAT JSON. Local openGauss
-  in Docker Desktop (Mac) is blocked by a cgroup-v2 incompatibility — offline/gsql paths
-  are the supported ones.
-- Output text is **Chinese with technical terms in English** (node types, SQL, params,
-  rule names, severity). Match the surrounding style when editing.
+- **规则保持纯函数。** 凡是需要 DB 的（如统计新鲜度），由 `source` 取数据、附到
+  `PlanResult`，再由规则读取。
+- **`testdata/*.json` 被测试和 CLI 演示共用** —— 保持真实。`examples/sample-report.json`
+  由 `testdata/disk_sort_and_hash.json` 重新生成；漂移时 `TestExampleReportIsUpToDate`
+  会失败并给出重生成命令。
+- **analyzer 的测试用外部包 `analyzer_test`**，以避免与 `internal/rules` 的循环导入
+  （rules 依赖 analyzer）。
+- 这里的 Go 坑：`if` 初始化语句里的复合字面量要加括号（`if x := (Rule{}).Analyze(ctx); …`）；
+  `FindAllStringSubmatchIndex` 对不匹配的可选组返回 `-1`，切片前要先判。
+- **网络**：本环境需 `GOPROXY=https://goproxy.cn,direct`（默认代理超时）。air-gapped 构建：
+  `make vendor` 后 `go build -mod=vendor`。
+- **实时 openGauss**：用 `command` 连接器 + `gsql`（pgx 无法认证 openGauss 默认的 sha256），
+  且 FORMAT JSON 前要先 `SET explain_perf_mode=normal`。本地 Docker Desktop（Mac）跑
+  openGauss 受 cgroup v2 不兼容所限——离线/gsql 是支持的路径。
+- 输出文案为**中文、技术名词保留英文**（节点类型、SQL、参数、规则名、severity）。改文案时
+  沿用此风格。
 
-## Key surfaces
+## 关键界面
 
-- CLI commands: `plan` (offline), `analyze` (`--connector pgx|command`, `--exec`),
-  `serve`, `version`. Global flags include `--format text|json`, `--disable-rule`, and
-  per-rule thresholds (e.g. `--seqscan-rows`, `--stale-mod-ratio`).
-- HTTP: `POST /v1/plan`, `POST /v1/analyze`, `GET /v1/rules`, `GET /rules`, `GET /healthz`.
-- Releases are static single binaries; `gh release create` with `dist/*` + `SHA256SUMS`.
+- CLI 命令：`plan`（离线）、`analyze`（`--connector pgx|command`、`--exec`）、`serve`、
+  `version`。全局 flag 含 `--format text|json`、`--disable-rule`，以及各规则阈值
+  （如 `--seqscan-rows`、`--stale-mod-ratio`）。
+- HTTP：`POST /v1/plan`、`POST /v1/analyze`、`GET /v1/rules`、`GET /rules`、`GET /healthz`。
+- 发布为静态单二进制；`gh release create` 上传 `dist/*` + `SHA256SUMS`。
