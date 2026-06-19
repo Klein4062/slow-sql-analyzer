@@ -56,6 +56,9 @@ cover: ## Run tests with coverage; print per-package + total (target 90% on chan
 	@go tool cover -func=coverage.out | tail -1
 	@echo "（按包见上方各 ok 行；HTML: go tool cover -html=coverage.out）"
 
+test-integration: ## Run live integration tests against PostgreSQL (set SSA_TEST_ADMIN_DSN)
+	go test -tags=integration -cover ./internal/source/
+
 cover-html: cover ## Open HTML coverage report
 	go tool cover -html=coverage.out
 

@@ -141,6 +141,11 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
       cli 0→37%（buildConfig flag 映射、version、buildLiveSource 各分支、runAnalysis 文本+json）。
     cmd/main 与 source.PostgresSource.Fetch（需真实 DB）、cli serve（阻塞监听）未单测——属集成测试范畴。
     总数 46.2%→75.6%。仍未到全局 90%：剩 source/cli/cmd 这类需 live-DB/集成才能覆盖，是后续抬升点。
+20. **新增集成测试（`-tags=integration`）覆盖 live 路径**。`internal/source/integration_test.go` 带
+    build tag，默认不跑（`make ci` 保持离线快速）；`make test-integration` 时连真实 PostgreSQL：
+    建临时库 `ssa_itest` → 5 万行无索引表 → 跑 `PostgresSource.Fetch`（pgx 连接/只读事务/EXPLAIN/
+    queryTableStats/回滚）、估算模式、写语句守卫+`--allow-writes` 回滚验证、`CommandSource`+psql。
+    跑完自动删库。source 覆盖率 53.5% → **88.4%**（带 tag 时）。DSN 经 `SSA_TEST_ADMIN_DSN` 覆盖。
 
 ## 踩过的坑（值得记录）
 
