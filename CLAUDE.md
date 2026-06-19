@@ -22,6 +22,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 理由：README 是用户入口、DEVLOG 是演进记录；过时的文档比没有更误导。提交前自检
 「这次改动需要更 README 吗？DEVLOG 加条了吗？」——两个都问到再提交。
 
+**每次代码修改后，检查测试覆盖率**（用 `make cover`）：**本次改动涉及的包**应达到
+**90%** 的语句覆盖，未达标就补测试用例再提交（新增/修改的逻辑必须有测试）。注意这是按「改动
+的包」算，不是全局——当前基线 advise/report 已 80%+，但 plan/analyzer/rules/api/source 仍
+~40%、cli/config 为 0%，改动这些包时顺手补测试，逐步抬升。CI 已带 `-cover` 输出各包覆盖率
+（信息性，未做 90% 硬门禁——硬门禁需先把覆盖率抬到 90% 再开，否则会立刻让 CI 变红）。
+
 ## 常用命令
 
 ```bash

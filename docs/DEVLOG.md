@@ -127,6 +127,12 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     同时在 CLAUDE.md 新增「项目约束」一节：**每次代码修改后必须同步维护 README（用户可见行为/
     用法变化时）与 DEVLOG（任何实质性改动加一条里程碑）**，提交前自检两问。理由：过时文档比没
     文档更误导。属软约束（指导），若日后要确定性拦截/自动执行，再配 `.claude/settings.json` hook。
+18. **新增「覆盖率 90%」项目约束 + `make cover`**。CLAUDE.md 项目约束再加一条：每次代码修改后用
+    `make cover` 检查覆盖率，**改动涉及的包**应达 90%，未达标补测试。配套加 `make cover`（生成
+    `coverage.out` + 打印总覆盖率）/`make cover-html`，`.gitignore` 忽略 `coverage.out`。
+    **重要现实**：当前全局覆盖率远未到 90%（advise/report 80%+，plan/analyzer/rules/api/source ~40%，
+    cli/config 0%）——故约束按「改动的包」算、增量达成，**未做 90% 硬门禁**（会立刻让 CI 变红）；
+    CI 仍只带 `-cover` 信息性输出。日后想把覆盖率抬到 90% 再开硬门禁，是一项独立的大工作量。
 
 ## 踩过的坑（值得记录）
 

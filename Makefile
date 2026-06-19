@@ -50,6 +50,15 @@ build-all: ## Cross-compile static binaries for every target into dist/
 test: ## Run unit tests (count=1 to bypass cache)
 	go test -count=1 ./...
 
+cover: ## Run tests with coverage; print per-package + total (target 90% on changed packages)
+	go test -count=1 -coverprofile=coverage.out ./...
+	@echo "=== 总覆盖率 ==="
+	@go tool cover -func=coverage.out | tail -1
+	@echo "（按包见上方各 ok 行；HTML: go tool cover -html=coverage.out）"
+
+cover-html: cover ## Open HTML coverage report
+	go tool cover -html=coverage.out
+
 ci: ## Run the same gates as GitHub Actions CI (gofmt + vet + build + test)
 	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "gofmt 需格式化:"; echo "$$out"; exit 1; fi
 	go vet ./...

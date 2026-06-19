@@ -262,9 +262,10 @@ testdata/       # 真实 EXPLAIN JSON 样例，供单测
 ```bash
 go test ./...      # 跑测试
 make ci            # 与 GitHub Actions 一致的完整门禁：gofmt + vet + build + test
+make cover         # 覆盖率：各包 + 总数（HTML: make cover-html）
 ```
 
-所有改动必须保持测试全绿（CI 会自动强制）。测试纪律、基线清单、新增规则清单见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+所有改动必须保持测试全绿（CI 会自动强制）。覆盖率目标：**改动涉及的包达 90%**，未达标补测试。测试纪律、基线清单、新增规则清单见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 限制与说明
 

@@ -8,6 +8,7 @@
 # Test / coverage
 *.out
 coverage.*
+coverage.out
 
 # Go workspace
 go.work
