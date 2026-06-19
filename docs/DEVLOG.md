@@ -121,6 +121,12 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     无法在 v2 生成 `gscgroup_omm.cfg` 而启动崩溃（5.0.0/latest 均如此）——这是已知问题，非参数
     可绕。故 openGauss 走**离线**（gsql 导出 FORMAT JSON 粘贴）或**实时 command 连接器 + gsql**
     连远程 Linux 实例（原生 cgroup 无此问题）。
+17. **新增 CLAUDE.md 与「文档同步」项目约束**。为仓库添加 `CLAUDE.md`（Claude Code 上下文），
+    记录分层架构、命令、加规则清单与非显而易见的坑（present-map、规则须纯、analyzer 外部测试包、
+    openGauss Vec/CStore 识别、GOPROXY、cgroup v2）；文案中文、技术名词保留英文。
+    同时在 CLAUDE.md 新增「项目约束」一节：**每次代码修改后必须同步维护 README（用户可见行为/
+    用法变化时）与 DEVLOG（任何实质性改动加一条里程碑）**，提交前自检两问。理由：过时文档比没
+    文档更误导。属软约束（指导），若日后要确定性拦截/自动执行，再配 `.claude/settings.json` hook。
 
 ## 踩过的坑（值得记录）
 

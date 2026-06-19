@@ -9,6 +9,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 （chi，单个内嵌 HTML）、JSON。两种数据来源：离线（粘贴 EXPLAIN FORMAT JSON）与实时
 （连库执行 EXPLAIN）。模块路径：`github.com/Klein4062/slow-sql-analyzer`（Go 1.26）。
 
+## 项目约束
+
+**每次完成代码修改后，必须同步维护文档**（这是硬性纪律，不是可选步骤）：
+
+- `README.md`：当改动影响**用户可见的行为/用法**（新命令、新 flag、新规则、行为变化、
+  兼容性）时，必须同步更新对应章节（特性表、快速开始、配置、限制等）。
+- `docs/DEVLOG.md`：任何**实质性改动**都新增一条里程碑，记录做了什么、关键设计决策、
+  以及踩到的坑（供后续复盘）。
+- 纯重构、注释、格式化等不影响行为的改动可只更 DEVLOG 或跳过。
+
+理由：README 是用户入口、DEVLOG 是演进记录；过时的文档比没有更误导。提交前自检
+「这次改动需要更 README 吗？DEVLOG 加条了吗？」——两个都问到再提交。
+
 ## 常用命令
 
 ```bash
