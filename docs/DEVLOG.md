@@ -146,6 +146,12 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     建临时库 `ssa_itest` → 5 万行无索引表 → 跑 `PostgresSource.Fetch`（pgx 连接/只读事务/EXPLAIN/
     queryTableStats/回滚）、估算模式、写语句守卫+`--allow-writes` 回滚验证、`CommandSource`+psql。
     跑完自动删库。source 覆盖率 53.5% → **88.4%**（带 tag 时）。DSN 经 `SSA_TEST_ADMIN_DSN` 覆盖。
+21. **serve/api 集成测试**。`internal/api/integration_test.go`（同 `//go:build integration`）起真实
+    `api.Handler`（httptest）连本地 PG，打 `/v1/analyze`（覆盖之前单测够不着的实时成功路径：
+    HTTP→analyzeQuery→PostgresSource→EXPLAIN→渲染）、`/v1/plan` 离线、`/healthz`/`/v1/rules`/`/rules`/`/`。
+    用独立临时库 `ssa_itest_api`（与 source 包的 `ssa_itest` 区分，两包可并行）。`make test-integration`
+    改为跑 `./internal/source/ ./internal/api/`。api 覆盖率 78.7% → **86.5%**。`cli serve` 的
+    `http.ListenAndServe` 那行仍是入口胶水（Handler 已被 httptest 覆盖），未单测。
 
 ## 踩过的坑（值得记录）
 

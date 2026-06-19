@@ -269,14 +269,14 @@ make cover         # 覆盖率：各包 + 总数（HTML: make cover-html）
 
 ### 集成测试（连真实 PostgreSQL）
 
-`internal/source` 的 live 路径（pgx 连接、command 子进程）由带 `//go:build integration` 标签的测试覆盖，默认不跑（保持 CI 离线快速）。需要时：
+`internal/source`（pgx 连接、command 子进程）与 `internal/api`（`/v1/analyze` 实时成功路径）的 live 路径由带 `//go:build integration` 标签的测试覆盖，默认不跑（保持 CI 离线快速）。需要时：
 
 ```bash
 make test-integration          # 连本地 PG（默认 SSA_TEST_ADMIN_DSN=host=/tmp ... user=klein）
 SSA_TEST_ADMIN_DSN="postgres://user@host/postgres" make test-integration   # 指定库
 ```
 
-它会在临时库 `ssa_itest` 建表、跑完自动删库。
+它会在临时库 `ssa_itest` / `ssa_itest_api` 建表、跑完自动删库。
 
 ## 限制与说明
 
