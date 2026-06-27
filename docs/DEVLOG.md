@@ -152,6 +152,16 @@ ANALYZE。用自定义 `UnmarshalJSON` 记录每个节点原始存在的 key 集
     用独立临时库 `ssa_itest_api`（与 source 包的 `ssa_itest` 区分，两包可并行）。`make test-integration`
     改为跑 `./internal/source/ ./internal/api/`。api 覆盖率 78.7% → **86.5%**。`cli serve` 的
     `http.ListenAndServe` 那行仍是入口胶水（Handler 已被 httptest 覆盖），未单测。
+22. **支持 EXPLAIN 文本格式（非 JSON）解析**。之前只解析 FORMAT JSON。新增 `plan.ParseText`，
+    `plan.Parse` 改为**自动识别**（首字符 `[`/`{` 走 JSON，否则走文本）。文本解析为启发式：
+    用 `(cost=...)` 标记识别节点行、相对缩进栈建树（规避 PG 文本缩进不规则）、剥离 `->` 子节点
+    箭头与 `Parallel ` 前缀（与 JSON 节点类型统一）、按 key 解析规则所需字段（Filter/Rows Removed/
+    Index Cond/Hash Cond/Sort Key/Sort Method+Disk/Hash Buckets+Batches/Buffers 等）。
+    **踩坑**：先用带 `->` 的手写 fixture 测试失败——查证发现**真实 PG 文本格式确实用 `->` 标记子节点**
+    且并行节点带 `Parallel ` 前缀（之前以为纯缩进无箭头），于是从本地 PG 抓真实计划做 ground truth，
+    据此修正解析器。另：初版 `indexWord` 的「词边界」判断写反导致 ` on `/` using ` 永远不匹配
+    （NodeType 变成整串），改回纯子串搜索。用真实 PG 计划验证：树结构正确、规则触发
+    （SeqScanLargeTable/InefficientFilter）。README/CLAUDE.md 去掉「文本不支持」、改为已支持。
 
 ## 踩过的坑（值得记录）
 

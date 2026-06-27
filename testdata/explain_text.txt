@@ -1,0 +1,15 @@
+ Finalize Aggregate  (cost=9199.86..9199.87 rows=1 width=8) (actual time=41.492..43.996 rows=1 loops=1)
+   ->  Gather  (cost=9199.74..9199.85 rows=1 width=8) (actual time=41.224..43.904 rows=2 loops=1)
+         Workers Planned: 1
+         Workers Launched: 1
+         ->  Partial Aggregate  (cost=8199.74..8199.75 rows=1 width=8) (actual time=32.999..33.001 rows=1 loops=2)
+               ->  Parallel Hash Join  (cost=4098.00..8195.90 rows=1539 width=0) (actual time=12.113..32.877 rows=1272 loops=2)
+                     Hash Cond: (o2.id = o1.id)
+                     ->  Parallel Seq Scan on orders o2  (cost=0.00..3696.41 rows=152941 width=8) (actual time=0.007..10.142 rows=130000 loops=2)
+                     ->  Parallel Hash  (cost=4078.76..4078.76 rows=1539 width=8) (actual time=11.707..11.707 rows=1272 loops=2)
+                           Buckets: 4096  Batches: 1  Memory Usage: 160kB
+                           ->  Parallel Seq Scan on orders o1  (cost=0.00..4078.76 rows=1539 width=8) (actual time=0.191..11.437 rows=1272 loops=2)
+                                 Filter: (status = 'pending'::text)
+                                 Rows Removed by Filter: 128728
+ Planning Time: 6.574 ms
+ Execution Time: 44.651 ms

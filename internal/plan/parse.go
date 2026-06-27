@@ -31,20 +31,30 @@ func (n *PlanNode) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Parse decodes PostgreSQL EXPLAIN (FORMAT JSON) output.
+// Parse decodes PostgreSQL EXPLAIN output, auto-detecting format:
 //
-// The on-the-wire shape is a JSON array with one element per statement
-// (a single EXPLAIN yields one element):
+//   - first non-whitespace byte '[' or '{' -> EXPLAIN (FORMAT JSON);
+//   - otherwise EXPLAIN text output (indentation-based).
 //
-//	[ {"Plan": {...}, "Execution Time": 1.2, "Planning Time": 0.1} ]
+// IsAnalyze is derived from whether nodes carry actual execution stats, which
+// determines whether rules depending on runtime stats are enabled.
 //
-// Parse uses the first statement. An error is returned if the input is not a
-// JSON array or contains no plan.
-//
-// 解析 PG 的 EXPLAIN (FORMAT JSON) 输出。顶层是一个数组（每条语句一个元素，
-// 一条 EXPLAIN 只产生一个元素）。取第一个元素。IsAnalyze 由根节点是否有
-// "Actual Rows" key 判定——这决定依赖真实统计的规则是否启用。
+// 自动识别 JSON / 文本格式：首字符为 [ 或 { 走 JSON，否则走文本解析。
 func Parse(data []byte) (*PlanResult, error) {
+	for _, b := range data {
+		if b == ' ' || b == '\t' || b == '\n' || b == '\r' {
+			continue
+		}
+		if b == '[' || b == '{' {
+			return parseJSON(data)
+		}
+		return ParseText(data)
+	}
+	return nil, fmt.Errorf("empty explain input")
+}
+
+// parseJSON decodes PostgreSQL EXPLAIN (FORMAT JSON) output.
+func parseJSON(data []byte) (*PlanResult, error) {
 	var statements []json.RawMessage
 	if err := json.Unmarshal(data, &statements); err != nil {
 		return nil, fmt.Errorf("explain output is not a JSON array: %w", err)

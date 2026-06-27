@@ -87,7 +87,7 @@ scp dist/slow-sql-analyzer-linux-amd64 user@host:~/slow-sql-analyzer
 
 ### 离线分析（无需数据库）
 
-把 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 的输出喂给工具：
+把 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 的输出喂给工具（也支持**文本格式** `EXPLAIN`，自动识别）：
 
 ```bash
 psql -d mydb -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT * FROM orders WHERE status='pending'" \
@@ -282,7 +282,7 @@ SSA_TEST_ADMIN_DSN="postgres://user@host/postgres" make test-integration   # 指
 
 - 支持 **PostgreSQL 与 openGauss**（openGauss 走离线/gsql command 连接器，见上）。规则针对 PG 兼容的执行计划字段设计。
 - 索引建议为**启发式**：通过轻量词法提取列引用，非完整 SQL 解析，需人工复核。
-- 文本格式 EXPLAIN（非 JSON）解析树状结构脆弱，主路径使用 `FORMAT JSON`。
+- 支持 EXPLAIN 的 **JSON 与文本**两种格式（`plan.Parse` 自动识别）；文本解析为启发式（按缩进 + `cost=` 标记建树、剥离 `->`/`Parallel ` 前缀），覆盖常见节点与字段，复杂/冷门输出仍建议 `FORMAT JSON`。
 
 ## License
 

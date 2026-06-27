@@ -60,7 +60,9 @@ source（取计划） → plan（解析 + 树） → analyzer（纯规则） →
   `CommandSource`（shell 调 psql/gsql，用于内网）。三者对分析层透明。**只有 source 做 IO**
   ——实时统计新鲜度在这里查，附到 `PlanResult.TableStats`，再由纯规则消费。
 - **`internal/plan`** —— `PlanNode` 映射 PostgreSQL EXPLAIN FORMAT JSON（json tag 带空格）。
-  自定义 `UnmarshalJSON` 把原始存在的 key 记进 `present` map，从而区分**字段缺失 vs 零值**
+  `Parse` 自动识别 JSON / 文本两种格式（文本经 `textparse.go` 启发式解析：`cost=` 标记识别节点行、
+  相对缩进栈建树、剥离 `->`/`Parallel ` 前缀、按 key 解析规则所需字段）。自定义 `UnmarshalJSON`
+  把原始存在的 key 记进 `present` map，从而区分**字段缺失 vs 零值**
   （如 `Actual Rows` 缺失 ⇒ 没用 ANALYZE 跑；见 `HasActual`/`IsAnalyze`）。节点判定 helper
   （`IsSeqScan`/`IsSort`/`IsHashNode`/`IsHashAggregate`/`IsNestedLoop`）同时覆盖 PostgreSQL
   与 **openGauss 向量化/列存**节点（`CStore Scan`、`Vec Seq Scan`、`Vec Hash`、`VecAgg`、
