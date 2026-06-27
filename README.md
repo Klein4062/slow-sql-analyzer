@@ -5,6 +5,8 @@
 
 通过 **SQL 与执行计划**分析 **PostgreSQL / openGauss** 查询计划是否最优，并给出**可执行的优化建议**（缺失索引、`work_mem` 调优、`ANALYZE` 统计、查询改写提示）。openGauss 的行存计划直接兼容；列存/向量化引擎（`CStore Scan`、`Vec Hash Join`、`VecAgg` 等）也已识别。
 
+📋 正式的项目说明见 [项目描述文档](docs/项目描述.md)（摘要 / 创意详情 / 方案描述）。
+
 提供 **CLI**、**HTTP API** 与**可视化网页**三种使用方式，支持 **离线解析**已有 EXPLAIN 计划与 **实时连库** 执行 EXPLAIN 两种数据来源。已用真实 PostgreSQL 17 闭环验证（无索引查询建议建索引后，14.97ms → 1.23ms，≈12×）。
 
 ```
